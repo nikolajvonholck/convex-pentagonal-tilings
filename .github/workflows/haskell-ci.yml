@@ -16,6 +16,12 @@ jobs:
 
     - name: Setup Haskell
       uses: mstksg/setup-stack@v2
+      
+    - name: Cache dependencies
+      uses: actions/cache@v1
+      with:
+        path: ~/.stack
+        key: stack-${{ hashFiles('stack.yaml.lock') }}
 
     - name: Build
       run: |
