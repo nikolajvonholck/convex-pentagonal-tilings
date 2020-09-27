@@ -7,7 +7,6 @@ import Data.Ord (comparing)
 import Data.List (sortOn)
 import qualified Data.List as List
 import Data.Maybe (fromJust, fromMaybe)
---import Debug.Trace (traceShow, trace)
 
 data Constraint = [Rational] :<=: Rational
                 | [Rational] :>=: Rational
@@ -182,8 +181,3 @@ removeXZero cs (bv, ass, bs, _, _) = -- Note: x_0 is not basic.
       csh = foldl (\obj (i, row) -> addRows obj (mulRow (-1 * cs!(bvh!i)) row)) cs (enumerate assh)
       nuh = sum $ map (\(i, b) -> -1 * cs!(bvh!i) * b) (enumerate bsh)
   in (bvh, assh, bsh, csh, nuh)
-
--- showSlack :: SlackForm -> String
--- showSlack (bv, ass, bs, cs, nu) =
---   let vals = [show bv, show ass, show bs, show cs, show nu]
---   in unlines $ map (\(s, v) -> s ++ ": " ++ v) (zip ["bv", "ass", "bs", "cs", "nu"] vals)
