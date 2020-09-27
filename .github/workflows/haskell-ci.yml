@@ -1,0 +1,26 @@
+name: Haskell CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out
+      uses: actions/checkout@v2
+
+    - name: Setup Haskell
+      uses: mstksg/setup-stack@v2
+
+    - name: Build
+      run: |
+        stack --no-terminal build --fast --pedantic
+
+    - name: Test
+      run: |
+        stack --no-terminal test --pedantic
