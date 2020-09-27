@@ -1,9 +1,7 @@
 module Permutation (dihedralGroup, symmetricGroup, permute) where
 
 import Data.List (permutations, genericTake)
-import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, elems, fromList, (!?), empty, mapMaybe)
-import Debug.Trace (traceShow)
 
 data Permutation = Permutation (Map Integer Integer)
   deriving (Show, Eq)

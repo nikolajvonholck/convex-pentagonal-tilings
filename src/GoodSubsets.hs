@@ -4,7 +4,7 @@ import Simplex
 import Matrix
 import Data.Set (Set, toList, fromList, insert, (\\))
 import qualified Data.Map.Strict as Map
-import Data.Map.Strict (Map, keysSet, member)
+import Data.Map.Strict (Map, member)
 
 type VectorType = [Integer]
 type VectorTypeSet = Set VectorType
@@ -71,11 +71,13 @@ constructV (u@[u1, u2, u3, u4, u5]) (minX@[minX1, minX2, minX3, minX4, minX5]) =
           let v = [v1, v2, v3, v4, v5],
           dotProduct (toVec v) u >= 0,
           dotProduct (toVec v) minX <= 2]
+constructV _ _ = error "Invalid input."
 
 constructU :: Vector -> [Vector] -> Vector -> Vector
 constructU [_, _, _, minX4, minX5] [_, _, _, minXpoint4, minXpoint5] alpha' =
   let alpha = if minX5 > 0 || minX4 > 0 then minXpoint5 else minXpoint4
   in alpha `vectorSubtract` alpha'
+constructU _ _ _ = error "Invalid input."
 
 minXs :: VectorTypeSet -> [(Rational, Vector)]
 minXs xs = do

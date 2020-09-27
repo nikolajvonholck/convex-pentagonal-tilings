@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5ed02889a71f95d3008bb5a29608cbb079c701b4c5f39ba27c5c66dc59203e9f
+-- hash: 41d1d2205534f5e45877e922b3005f402d115afab5489779dca40c45b31777c5
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
@@ -35,7 +35,6 @@ library
       Paths_convex_pentagonal_tilings
   hs-source-dirs:
       src
-  ghc-options: -Wall
   build-depends:
       base >=4.7 && <5
     , containers >=0.6.2.1
@@ -47,7 +46,7 @@ executable convex-pentagonal-tilings-exe
       Paths_convex_pentagonal_tilings
   hs-source-dirs:
       app
-  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
     , containers >=0.6.2.1

@@ -6,9 +6,6 @@ import Data.Set (empty, singleton, (\\), size, toList, fromList, unions, member,
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 
-s5 = symmetricGroup 5
-d5n = dihedralGroup 5
-
 main :: IO ()
 main = do
   putStrLn "Will determine all non-empty maximal good sets..."
@@ -21,6 +18,8 @@ main = do
   let reps = unique (toList allPermutations) empty
   putStrLn . show $ length reps -- 371 √
   where
+    s5 = symmetricGroup 5
+    d5n = dihedralGroup 5
     unique [] _ = []
     unique (vs:vss) except =
       if vs `member` except

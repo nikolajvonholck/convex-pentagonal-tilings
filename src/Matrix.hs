@@ -1,4 +1,4 @@
-module Matrix (reducedEchelonForm, nullSpaceBasis, Vector, Matrix, dotProduct, zeroVector, unitVector, vectorSum, vectorSubtract, scaleVector) where
+module Matrix (reducedEchelonForm, nullSpaceBasis, Vector, Matrix, dotProduct, zeroVector, unitVector, vectorSum, vectorSubtract, scaleVector, mulRow, addRow) where
 import Data.List (transpose, find, (\\))
 import qualified Data.List as List
 import Data.Maybe (catMaybes)
