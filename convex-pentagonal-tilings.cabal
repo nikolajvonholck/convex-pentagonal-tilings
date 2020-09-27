@@ -4,13 +4,13 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 219688c2e4f633f696dccb507de0bcddff5eaaf58339879fc1d7e69ad241f855
+-- hash: 5ed02889a71f95d3008bb5a29608cbb079c701b4c5f39ba27c5c66dc59203e9f
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/convex-pentagonal-tilings#readme>
-homepage:       https://github.com/githubuser/convex-pentagonal-tilings#readme
-bug-reports:    https://github.com/githubuser/convex-pentagonal-tilings/issues
+description:    Please see the README on GitHub at <https://github.com/nikolajvonholck/convex-pentagonal-tilings#readme>
+homepage:       https://github.com/nikolajvonholck/convex-pentagonal-tilings#readme
+bug-reports:    https://github.com/nikolajvonholck/convex-pentagonal-tilings/issues
 author:         Nikolaj von Holck
 maintainer:     example@example.com
 copyright:      2020 Nikolaj von Holck
@@ -23,17 +23,22 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/convex-pentagonal-tilings
+  location: https://github.com/nikolajvonholck/convex-pentagonal-tilings
 
 library
   exposed-modules:
-      Lib
+      GoodSubsets
+      Matrix
+      Permutation
+      Simplex
   other-modules:
       Paths_convex_pentagonal_tilings
   hs-source-dirs:
       src
+  ghc-options: -Wall
   build-depends:
       base >=4.7 && <5
+    , containers >=0.6.2.1
   default-language: Haskell2010
 
 executable convex-pentagonal-tilings-exe
@@ -42,9 +47,10 @@ executable convex-pentagonal-tilings-exe
       Paths_convex_pentagonal_tilings
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , containers >=0.6.2.1
     , convex-pentagonal-tilings
   default-language: Haskell2010
 
@@ -58,5 +64,8 @@ test-suite convex-pentagonal-tilings-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , containers >=0.6.2.1
     , convex-pentagonal-tilings
+    , tasty
+    , tasty-hunit
   default-language: Haskell2010
