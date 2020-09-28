@@ -1,25 +1,25 @@
 module Matrix (reducedEchelonForm, nullSpaceBasis, Vector, Matrix, dotProduct, zeroVector, unitVector, vectorSum, vectorSubtract, scaleVector, mulRow, addRow) where
-import Data.List (transpose, find, (\\))
-import qualified Data.List as List
+
+import Utils ((!), enumerate, findIndex)
+import Data.List (transpose, find, (\\), genericReplicate, genericLength)
 import Data.Maybe (catMaybes)
---import Debug.Trace (traceShow, trace)
 
 type Vector = [Rational]
 type Matrix = [[Rational]]
 
-mRows :: Matrix -> Int
-mRows = length
+mRows :: Matrix -> Integer
+mRows = genericLength
 
-nCols :: Matrix -> Int
-nCols = length . head
+nCols :: Matrix -> Integer
+nCols = genericLength . head
 
-dims :: Matrix -> (Int, Int)
+dims :: Matrix -> (Integer, Integer)
 dims xss = (mRows xss, nCols xss)
 
-zeroVector :: Int -> Vector
-zeroVector n = replicate n 0
+zeroVector :: Integer -> Vector
+zeroVector n = genericReplicate n 0
 
-unitVector :: Int -> Int -> Vector
+unitVector :: Integer -> Integer -> Vector
 unitVector n i = [delta i k | k <- [1..n]]
 
 scaleVector :: Rational -> Vector -> Vector
@@ -39,16 +39,16 @@ dotProduct xs ys = if length xs /= length ys
 matrixProduct :: Matrix -> Matrix -> Matrix
 matrixProduct m n = [ map (dotProduct row) (transpose n) | row <- m ]
 
-matrix :: Int -> Int -> (Int -> Int -> Rational) -> Matrix
+matrix :: Integer -> Integer -> (Integer -> Integer -> Rational) -> Matrix
 matrix m n entry = [[entry i j | j <- [1..n]] | i <- [1..m]]
 
-elementaryMatrix :: Int -> (Int -> Int -> Rational) -> Matrix
+elementaryMatrix :: Integer -> (Integer -> Integer -> Rational) -> Matrix
 elementaryMatrix n = matrix n n
 
-delta :: Int -> Int -> Rational
+delta :: Integer -> Integer -> Rational
 delta x i = if x == i then 1 else 0
 
-swapRows :: Int -> Int -> Matrix -> Matrix
+swapRows :: Integer -> Integer -> Matrix -> Matrix
 swapRows i j xss =
   let m = mRows xss
       elemMatrix = elementaryMatrix m (\r c ->
@@ -61,28 +61,24 @@ swapRows i j xss =
         )
   in matrixProduct elemMatrix xss
 
-mulRow :: Int -> Rational -> Matrix -> Matrix
+mulRow :: Integer -> Rational -> Matrix -> Matrix
 mulRow i a xss =
   let m = mRows xss
       elemMatrix = elementaryMatrix m
         (\r c -> if r == i then a * delta r c else delta r c)
   in matrixProduct elemMatrix xss
 
-addRow :: Int -> Rational -> Int -> Matrix -> Matrix
+addRow :: Integer -> Rational -> Integer -> Matrix -> Matrix
 addRow i a j xss =
   let m = mRows xss
       elemMatrix = elementaryMatrix m
         (\r c -> if r == i && c == j then a else delta r c)
   in matrixProduct elemMatrix xss
 
--- 1-indexed
-findIndex :: (a -> Bool) -> [a] -> Maybe Int
-findIndex f xs = fmap (+1) $ List.findIndex f xs
-
 reducedEchelonForm :: Matrix -> Matrix
 reducedEchelonForm = reduceFromCol (1, 1)
   where
-    reduceFromCol :: (Int, Int) -> Matrix -> Matrix
+    reduceFromCol :: (Integer, Integer) -> Matrix -> Matrix
     reduceFromCol (col, topRow) xss =
       let (m, n) = dims xss in
         if col > n || topRow > m then xss -- All cols reduced
@@ -104,7 +100,7 @@ reducedEchelonForm = reduceFromCol (1, 1)
 nullSpaceBasis :: Matrix -> [Vector]
 nullSpaceBasis = makeBasis . reducedEchelonForm
 
-pivotIndices :: Matrix -> [Int]
+pivotIndices :: Matrix -> [Integer]
 pivotIndices xss =
   catMaybes $ map (\row -> findIndex (/=0) row) xss
 
@@ -124,11 +120,3 @@ makeBasis xss =
     weave (False:_) _ [] = error "Impossible"
     weave (True:xs) (y:ys) zs  = y : weave xs ys zs
     weave (False:xs) ys (z:zs) = z : weave xs ys zs
-
--- 1-indexed
-(!) :: [a] -> Int -> a
-xs ! n = xs !! (n - 1)
-
--- 1-indexed
-enumerate :: [a] -> [(Int, a)]
-enumerate = zip [1..]

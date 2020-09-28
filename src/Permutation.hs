@@ -1,10 +1,10 @@
 module Permutation (dihedralGroup, symmetricGroup, permute) where
 
+import Utils (enumerate)
 import Data.List (permutations, genericTake)
 import Data.Map.Strict (Map, elems, fromList, (!?), empty, mapMaybe)
 
-data Permutation = Permutation (Map Integer Integer)
-  deriving (Show, Eq)
+data Permutation = Permutation (Map Integer Integer) deriving (Show, Eq)
 
 dihedralGroup :: Integer -> [Permutation]
 dihedralGroup n =
@@ -25,10 +25,6 @@ permute (Permutation p) l = elems $ compose (toMap l) p
 
 toMap :: [a] -> Map Integer a
 toMap p = fromList $ enumerate p
-
--- 1-indexed
-enumerate :: [a] -> [(Integer, a)]
-enumerate = zip [1..]
 
 compose :: Ord b => Map b c -> Map a b -> Map a c
 compose bc ab

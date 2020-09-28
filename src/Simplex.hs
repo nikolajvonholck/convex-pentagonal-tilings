@@ -1,11 +1,9 @@
 module Simplex (optimize, Constraint(..), Objective(..), Solution(..)) where
 
+import Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy)
 import Data.Map.Strict (fromList)
 import qualified Data.Map.Strict as Map
-import Data.Foldable (minimumBy)
-import Data.Ord (comparing)
-import Data.List (sortOn)
-import qualified Data.List as List
+import Data.List (sortOn, genericLength, genericReplicate)
 import Data.Maybe (fromJust, fromMaybe)
 
 data Constraint = [Rational] :<=: Rational
@@ -26,7 +24,7 @@ data Objective = Maximize [Rational]
 type StandardForm = ([[Rational]], [Rational], [Rational])
 
 -- B, A, b, c, nu
-type SlackForm = ([Int], [[Rational]], [Rational], [Rational], Rational)
+type SlackForm = ([Integer], [[Rational]], [Rational], [Rational], Rational)
 
 optimize :: (Objective, [Constraint]) -> Solution
 optimize (obj, constraints) =
@@ -47,41 +45,12 @@ toStdForm (Maximize cs, consts) = let (ass, bs) = toStdConsts consts in (ass, bs
     toStdConsts ((coefs :<=: b):as) = let (ass, bs) = toStdConsts as in (coefs:ass, b:bs)
     toStdConsts [] = ([], [])
 
--- maxBy :: (Foldable t, Ord a) => (b -> a) -> t b -> b
--- maxBy = maximumBy . comparing
-
-minBy :: (Foldable t, Ord a) => (b -> a) -> t b -> b
-minBy = minimumBy . comparing
-
--- 1-indexed
-(!) :: [a] -> Int -> a
-xs ! n = xs !! (n - 1)
-
--- 1-indexed
-replaceAt :: Int -> a -> [a] -> [a]
-replaceAt i x xs = take (i - 1) xs ++ x : (drop i xs)
-
--- 1-indexed
-findIndex :: (a -> Bool) -> [a] -> Maybe Int
-findIndex f xs = fmap (+1) $ List.findIndex f xs
-
--- 1-indexed
-elemIndex :: Eq a => a -> [a] -> Maybe Int
-elemIndex x xs = fmap (+1) $ List.elemIndex x xs
-
--- 1-indexed
--- dropAt :: Int -> [a] -> [a]
--- dropAt i xs = concat [take (i - 1) xs, drop i xs]
-
--- 1-indexed
-enumerate :: [a] -> [(Int, a)]
-enumerate = zip [1..]
 
 toSlackForm :: StandardForm -> SlackForm
 toSlackForm (ass, bs, cs) =
-  let m = length bs
-      n = length cs
-      mZeros = replicate m 0
+  let m = genericLength bs
+      n = genericLength cs
+      mZeros = genericReplicate m 0
       asss = map (\(i, row) -> row ++ replaceAt i 1 mZeros) (enumerate ass)
       css = mulRow (-1) cs ++ mZeros
   in ([(n + 1)..(n + m)], asss, bs, css, 0)
@@ -92,7 +61,7 @@ mulRow c = map (*c)
 addRows :: [Rational] -> [Rational] -> [Rational]
 addRows xs ys = map (uncurry (+)) (zip xs ys)
 
-pivot :: SlackForm -> Int -> Int -> SlackForm
+pivot :: SlackForm -> Integer -> Integer -> SlackForm
 pivot (bv, ass, bs, cs, nu) l e =
   let row = l --bv!l    -- row
       column = e --nv!e -- column
@@ -111,11 +80,11 @@ pivot (bv, ass, bs, cs, nu) l e =
       nuHat = nu - (cs!column / pivotCell) * (bs!row)
   in (bvHat, assHat, bsHat, csHat, nuHat)
 
-selectEntering :: [Rational] -> Maybe Int
+selectEntering :: [Rational] -> Maybe Integer
 selectEntering cs = let (e, ce) = minBy snd (enumerate cs) -- Bland's rule.
   in if ce < 0 then Just e else Nothing
 
-selectLeaving :: [Rational] -> [Rational] -> [Int] -> Maybe Int
+selectLeaving :: [Rational] -> [Rational] -> [Integer] -> Maybe Integer
 selectLeaving bs column bv =
   if all (<=0) column then Nothing
   else
@@ -139,7 +108,7 @@ simplexLoop (slackForm@(bv, ass, bs, cs, _)) =
 
 extractSolution :: Objective -> SlackForm -> Solution
 extractSolution obj (bv, _, bs, cs, nu) =
-  let n = length cs - length bv
+  let n = genericLength cs - genericLength bv
       basicValueMap = fromList $ zip bv bs
       point = map (\i -> fromMaybe 0 (Map.lookup i basicValueMap)) [1..n]
       value = case obj of
@@ -154,7 +123,7 @@ feasibleSlackForm (standardForm@(ass, bs, cs)) =
   in if bk >= 0 -- Initial basic solution is feasible.
     then Just initialSlackForm
     else
-      let n = length cs
+      let n = genericLength cs
           lpAux = (map (-1:) ass, bs, -1:(replicate n 0))
           slackAux = toSlackForm lpAux
           feasibleSlackAux = pivot slackAux k 1 -- Makes basic solution feasible.
