@@ -1,4 +1,4 @@
-module Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy) where
+module Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy, delta) where
 
 import qualified Data.List as List
 import Data.Foldable (minimumBy)
@@ -27,3 +27,7 @@ replaceAt i x xs = List.genericTake (i - 1) xs ++ x : (List.genericDrop i xs)
 -- | Version of 'minimumBy' using default ordering.
 minBy :: (Foldable t, Ord a) => (b -> a) -> t b -> b
 minBy = minimumBy . comparing
+
+-- | Return 1 if 'y' equals 'x'; 0 otherwise.
+delta :: (Eq b, Num a) => b -> b -> a
+delta x y = if x == y then 1 else 0

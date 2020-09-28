@@ -9,7 +9,7 @@ import Data.Maybe (fromJust, fromMaybe)
 data Constraint = [Rational] :<=: Rational
                 | [Rational] :>=: Rational
                 | [Rational] :==: Rational
-                  deriving (Show, Eq)
+                deriving (Show, Eq)
 
 data Solution = Infeasible
               | Optimal (Rational, [Rational])
@@ -17,8 +17,8 @@ data Solution = Infeasible
               deriving (Show, Eq)
 
 data Objective = Maximize [Rational]
-                | Minimize [Rational]
-                deriving (Show, Eq)
+               | Minimize [Rational]
+               deriving (Show, Eq)
 
 -- (A, b, c)
 type StandardForm = ([[Rational]], [Rational], [Rational])
@@ -143,10 +143,9 @@ feasibleSlackForm (standardForm@(ass, bs, cs)) =
               in Just $ removeXZero initCs auxFinalSlack
 
 removeXZero :: [Rational] -> SlackForm -> SlackForm
-removeXZero cs (bv, ass, bs, _, _) = -- Note: x_0 is not basic.
-  let bvh = map (subtract 1) bv
-      assh = map tail ass
-      bsh = bs
-      csh = foldl (\obj (i, row) -> addRows obj (mulRow (-1 * cs!(bvh!i)) row)) cs (enumerate assh)
-      nuh = sum $ map (\(i, b) -> -1 * cs!(bvh!i) * b) (enumerate bsh)
-  in (bvh, assh, bsh, csh, nuh)
+removeXZero cs (bv, ass, bs, _, _) = -- Assumption: x_0 is not basic.
+  let bv' = [i - 1 | i <- bv]
+      ass' = [tail row | row <- ass]
+      cs' = foldl (\obj (i, row) -> addRows obj (mulRow (-1 * cs!(bv'!i)) row)) cs (enumerate ass')
+      nu' = sum $ [-1 * cs!(bv'!i) * b | (i, b) <- enumerate bs]
+  in (bv', ass', bs, cs', nu')
