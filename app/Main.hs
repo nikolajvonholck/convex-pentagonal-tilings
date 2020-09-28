@@ -1,7 +1,7 @@
 module Main where
 
-import GoodSubsets
-import Permutation
+import GoodSubsets (recurse)
+import Permutation (permute, symmetricGroup, dihedralGroup)
 import Data.Set (empty, singleton, (\\), size, toList, fromList, unions, member, union)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
@@ -11,12 +11,12 @@ main = do
   putStrLn "Will determine all non-empty maximal good sets..."
   let maximalSets = recurse empty Map.empty
   let maximalGoodSets = Map.filter id maximalSets
-  let nonEmptyMaximalGoodSets = Map.keysSet maximalGoodSets \\ singleton empty -- non-empty
-  putStrLn . show $ size nonEmptyMaximalGoodSets -- 193 √
+  let nonEmptyMaximalGoodSets = Map.keysSet maximalGoodSets \\ singleton empty
+  print $ size nonEmptyMaximalGoodSets -- 193 √
   let allPermutations = unions $ Set.map (\xs -> fromList [Set.map (permute p) xs | p <- s5]) nonEmptyMaximalGoodSets
-  putStrLn . show $ size allPermutations -- 3495 √
-  let reps = unique (toList allPermutations) empty
-  putStrLn . show $ length reps -- 371 √
+  print $ size allPermutations -- 3495 √
+  let representatives = unique (toList allPermutations) empty
+  print $ length representatives -- 371 √
   where
     s5 = symmetricGroup 5
     d5n = dihedralGroup 5

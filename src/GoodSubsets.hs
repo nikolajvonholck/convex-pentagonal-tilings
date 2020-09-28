@@ -38,7 +38,7 @@ findProperAngles xs =
         Infeasible -> error "Polytope is empty."
         Unbounded -> error "Polytope is unbounded."
         Optimal (minX1, alpha2) -> if minX1 == 1 then Nothing
-          else Just $ (1 / 2) |*| (alpha1 |+| alpha2) -- element of ]0,1[^5.
+          else Just $ (1 / 2) |*| (alpha1 |+| alpha2) -- Is element of ]0,1[^5.
 
 compatOrthogonalComplementBasis :: VectorTypeSet -> [Vector Rational]
 compatOrthogonalComplementBasis xs =
@@ -47,7 +47,7 @@ compatOrthogonalComplementBasis xs =
 compatSet :: VectorTypeSet -> Vector Rational -> VectorTypeSet
 compatSet xs alpha =
   let orthogonalComplement = compatOrthogonalComplementBasis xs
-      candidates = sequence [[0..floor (2 / a)] | a <- alpha] -- TODO: Reconsider bound.
+      candidates = sequence [[0..floor (2 / a)] | a <- alpha]
       isCompat x = all (\b -> x `dot` b == 0) orthogonalComplement
   in fromList [x | x <- candidates, isCompat (asRational x ++ [2])]
 

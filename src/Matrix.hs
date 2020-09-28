@@ -44,7 +44,7 @@ reducedEchelonForm = reduceFromCol (1, 1)
         if col > n || topRow > m then xss -- Reduction complete.
         else let column = (transpose xss) ! col
         in case find (\(i, x) -> topRow <= i && x /= 0) (enumerate column) of
-            Nothing -> reduceFromCol (col + 1, topRow) xss -- Skip column
+            Nothing -> reduceFromCol (col + 1, topRow) xss -- Skip column.
             Just (pivotRow, pivot) ->
               let rowOpsMatrix = squareMatrix m (\r c ->
                     if c == pivotRow then if r == pivotRow
@@ -52,7 +52,7 @@ reducedEchelonForm = reduceFromCol (1, 1)
                       else -column!r / pivot
                     else delta r c)
                   pivotInTop = swapRows topRow pivotRow $ rowOpsMatrix |.| xss
-              in reduceFromCol (col + 1, topRow + 1) pivotInTop
+              in reduceFromCol (col + 1, topRow + 1) pivotInTop -- Next column.
 
 nullSpaceBasis :: Matrix -> [Vector Rational]
 nullSpaceBasis = makeBasis . reducedEchelonForm
