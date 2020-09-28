@@ -26,8 +26,8 @@ type StandardForm = ([[Rational]], [Rational], [Rational])
 -- B, A, b, c, nu
 type SlackForm = ([Integer], [[Rational]], [Rational], [Rational], Rational)
 
-optimize :: (Objective, [Constraint]) -> Solution
-optimize (obj, constraints) =
+optimize :: Objective -> [Constraint] -> Solution
+optimize obj constraints =
   let standardForm = toStdForm (obj, constraints)
   in case feasibleSlackForm standardForm of
     Nothing -> Infeasible

@@ -56,7 +56,7 @@ isGood vs = -- TODO: Improve implementation of non-negetativity constraints.
   let obj = Maximize (zero (5*2))
       ext as = concat [[a, -a] | a <- as]
       commonConstraints = (ext [1, 1, 1, 1, 1] :==: 0) : [ext (asRational w) :>=: 0 | w <- toList vs]
-      searches = [optimize (obj, (ext (asRational v) :>=: 1) : commonConstraints) | v <- toList vs]
+      searches = [optimize obj $ (ext (asRational v) :>=: 1) : commonConstraints | v <- toList vs]
   in all (==Infeasible) searches
 
 constructV :: Vector Rational -> Vector Rational -> VectorTypeSet
@@ -89,7 +89,7 @@ minXs xs = do
     Optimal (value, point) -> (value, point)
 
 searchPolytype :: VectorTypeSet -> Objective -> Solution
-searchPolytype xs obj = optimize (obj, polytopeConstraints xs)
+searchPolytype xs obj = optimize obj $ polytopeConstraints xs
 
 polytopeConstraints :: VectorTypeSet -> [Constraint]
 polytopeConstraints vs = [
