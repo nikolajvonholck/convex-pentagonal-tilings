@@ -90,11 +90,10 @@ selectLeaving bs column bv =
 simplexLoop :: SlackForm -> Maybe SlackForm
 simplexLoop (slackForm@(bv, ass, bs, cs, _)) =
   case selectEntering cs of
-    Just e -> -- Find next vertex
-      let column = (transpose ass) ! e
-      in case selectLeaving bs column bv of
-        Nothing -> Nothing
-        Just l -> simplexLoop $ pivot slackForm l e
+    Just e -> do -- Find next vertex.
+        let column = (transpose ass) ! e
+        l <- selectLeaving bs column bv
+        simplexLoop $ pivot slackForm l e
     Nothing -> -- We are at an optimal vertex.
       Just slackForm
 
