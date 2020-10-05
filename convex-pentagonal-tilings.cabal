@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5c0ed4901ae8f4e791fe92fa27be47a7c4239e28b3546f044d67efac47e3b459
+-- hash: 902355f47841f33186ff7125fd457e1ab3d1e485a11558f5bb6cfc22438d2e59
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
@@ -31,6 +31,7 @@ library
       Matrix
       Permutation
       Simplex
+      TilingGraph
       Utils
       Vector
   other-modules:
