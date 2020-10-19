@@ -4,16 +4,68 @@ import Simplex (Objective(..), Constraint(..), Solution(..), optimize)
 import Vector (Vector, zero, unit, (|+|), (|-|), (|*|), dot)
 import Matrix (nullSpaceBasis)
 import Permutation (permute, symmetricGroup, dihedralGroup)
+import Utils (minBy, maxBy, (!))
+import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
+import ConvexPolytope (ConvexPolytope, Strictness(..), condition, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
 
 import qualified Data.Set as Set
-import Data.Set (Set, toList, fromList, insert, (\\))
+import Data.Set (Set, toList, fromList, insert, (\\), elems)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, member)
-import Data.List (genericLength)
-import Control.Monad (guard)
+import Data.List (genericLength, transpose)
+import Control.Monad (guard, foldM)
+import Data.Maybe (fromJust)
+
+import Debug.Trace (traceShow)
 
 type VectorType = Vector Integer
 type VectorTypeSet = Set VectorType
+
+initialAngleCP :: ConvexPolytope Rational
+initialAngleCP = fromJust $ do
+  ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 3)
+  boundedConvexPolytope NonStrict ass $ fromList [
+      condition [1, 0, 0, 0, 0] 1,
+      condition [-1, 1, 0, 0, 0] 0,
+      condition [0, -1, 1, 0, 0] 0,
+      condition [0, 0, -1, 1, 0] 0,
+      condition [0, 0, 0, -1, 1] 0,
+      condition [0, 0, 0, 0, -1] 0
+    ]
+
+angleCP :: VectorTypeSet -> Maybe (ConvexPolytope Rational)
+angleCP vs =
+  foldM projectOntoHyperplane initialAngleCP [HP v 2 | v <- elems $ Set.map asRational vs]
+
+minmax :: ConvexPolytope Rational -> ([Rational], [Rational], [Vector Rational], [Vector Rational])
+minmax cp =
+  let extr = extremePoints cp
+      coordLists = transpose $ elems extr
+      mins = map minimum coordLists
+      maxs = map maximum coordLists
+      minXs = [minBy (!i) extr | i <- [1..5]]
+      maxXs = [maxBy (!i) extr | i <- [1..5]]
+  in (mins, maxs, minXs, maxXs)
+
+initialGoodnessCP :: ConvexPolytope Rational
+initialGoodnessCP = fromJust $ do
+  ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 0)
+  boundedConvexPolytope NonStrict ass $ fromList [ -- [-1, 1]^5
+      condition [1, 0, 0, 0, 0] 1, -- x_1 <= 1
+      condition [-1, 0, 0, 0, 0] 1, -- -x_1 <= 1 --> x_1 >= -1
+      condition [0, 1, 0, 0, 0] 1,
+      condition [0, -1, 0, 0, 0] 1,
+      condition [0, 0, 1, 0, 0] 1,
+      condition [0, 0, -1, 0, 0] 1,
+      condition [0, 0, 0, 1, 0] 1,
+      condition [0, 0, 0, -1, 0] 1,
+      condition [0, 0, 0, 0, 1] 1,
+      condition [0, 0, 0, 0, -1] 1
+    ]
+
+goodnessCP :: VectorTypeSet -> Maybe (ConvexPolytope Rational)
+goodnessCP vs =
+  foldM cutHalfSpace initialGoodnessCP [condition v 0 | v <- elems $ Set.map asRational vs]
 
 inflate :: VectorTypeSet -> Maybe VectorTypeSet
 inflate xs =
@@ -30,33 +82,24 @@ inflate xs =
 
 recurse :: VectorTypeSet -> Map VectorTypeSet Bool -> Map VectorTypeSet Bool
 recurse xs maximalSets =
-  case findIncreasingAngles xs of
-    Nothing -> maximalSets
-    Just alpha ->
-      let compat = compatSet xs alpha
-      in if member compat maximalSets then maximalSets
-        else
-          let maximalSets' = Map.insert compat (isGood compat) maximalSets
-              (minX, minXpoints) = unzip $ minXs compat
-              u = constructU minX minXpoints alpha
-              vs = constructV u minX
-              toCheck = toList (vs \\ compat)
-          in foldl (\ms v -> recurse (insert v xs) ms) maximalSets' toCheck
+  case angleCP xs of
+    Nothing -> traceShow ("size", Map.size $ Map.filter id maximalSets, Map.size maximalSets) maximalSets
+    Just cp ->
+      let (minX, maxX, minXpoints, maxXpoints) = minmax cp
+      in if any (1<=) minX || any (0>=) maxX then maximalSets else
+        let alpha = (1 / 2) |*| (head minXpoints |+| last maxXpoints) -- Pick any 'interior' point.
+            compat = compatSet xs alpha
+        in if member compat maximalSets then maximalSets
+          else
+            let --compat' = traceShow ("goodness:", isGood compat == isGood2 compat) compat
+                maximalSets' = Map.insert compat (traceShow ("length compat", Set.size compat) (isGood2 compat)) maximalSets
+                u = constructU minX minXpoints alpha
+                vs = constructV u minX
+                toCheck = toList (vs \\ compat)
+            in foldl (\ms v -> recurse (insert v xs) ms) maximalSets' toCheck
 
 asRational :: Vector Integer -> Vector Rational
 asRational = fmap fromInteger
-
-findIncreasingAngles :: VectorTypeSet -> Maybe (Vector Rational)
-findIncreasingAngles xs =
-  case optimize (Maximize $ unit 5 5) $ polytopeIncreasingConstraints xs of
-    Infeasible -> Nothing
-    Unbounded -> error "Polytope is unbounded."
-    Optimal (maxX5, alpha1) -> if maxX5 == 0 then Nothing else
-      case optimize (Minimize $ unit 5 1) $ polytopeIncreasingConstraints xs of
-        Infeasible -> error "Polytope is empty."
-        Unbounded -> error "Polytope is unbounded."
-        Optimal (minX1, alpha2) -> if minX1 == 1 then Nothing
-          else Just $ (1 / 2) |*| (alpha1 |+| alpha2) -- Is element of ]0,1[^5.
 
 compatOrthogonalComplementBasis :: VectorTypeSet -> [Vector Rational]
 compatOrthogonalComplementBasis xs =
@@ -69,13 +112,21 @@ compatSet xs alpha =
       isCompat x = all (\b -> x `dot` b == 0) orthogonalComplement
   in fromList [x | x <- candidates, isCompat (asRational x ++ [2])]
 
-isGood :: VectorTypeSet -> Bool
-isGood vs = -- TODO: Improve implementation of non-negetativity constraints.
-  let obj = Maximize (zero (5*2))
-      ext as = concat [[a, -a] | a <- as]
-      commonConstraints = (ext [1, 1, 1, 1, 1] :==: 0) : [ext (asRational w) :>=: 0 | w <- toList vs]
-      searches = [optimize obj $ (ext (asRational v) :>=: 1) : commonConstraints | v <- toList vs]
-  in all (==Infeasible) searches
+isGood2 :: VectorTypeSet -> Bool
+isGood2 vs =
+  case goodnessCP vs of
+    Nothing -> True
+    Just cp ->
+      let extr = extremePoints cp
+      in not $ any (\e -> any (\c -> e `dot` c < 0) (Set.map asRational vs)) extr
+
+-- isGood :: VectorTypeSet -> Bool
+-- isGood vs = -- TODO: Improve implementation of non-negetativity constraints.
+--   let obj = Maximize (zero (5*2))
+--       ext as = concat [[a, -a] | a <- as]
+--       commonConstraints = (ext [1, 1, 1, 1, 1] :==: 0) : [ext (asRational w) :>=: 0 | w <- toList vs]
+--       searches = [optimize obj $ (ext (asRational v) :>=: 1) : commonConstraints | v <- toList vs]
+--   in all (==Infeasible) searches
 
 constructV :: Vector Rational -> Vector Rational -> VectorTypeSet
 constructV (u@[u1, u2, u3, u4, u5]) (minX@[minX1, minX2, minX3, minX4, minX5]) =
@@ -98,23 +149,15 @@ constructU [_, _, _, minX4, minX5] [_, _, _, minXpoint4, minXpoint5] alpha' =
   in alpha |-| alpha'
 constructU _ _ _ = error "Invalid input."
 
-minXs :: VectorTypeSet -> [(Rational, Vector Rational)]
-minXs xs = do
-  i <- [1..5]
-  return $ case optimize (Minimize $ unit 5 i) $ polytopeIncreasingConstraints xs of
-    Infeasible -> error "Polytope is empty."
-    Unbounded -> error "Polytope is unbounded."
-    Optimal (value, point) -> (value, point)
-
-polytopeIncreasingConstraints :: VectorTypeSet -> [Constraint]
-polytopeIncreasingConstraints vs = [
-    [1, 1, 1, 1, 1] :==: 3,
-    [1, 0, 0, 0, 0] :<=: 1,
-    [1, -1, 0, 0, 0] :>=: 0,
-    [0, 1, -1, 0, 0] :>=: 0,
-    [0, 0, 1, -1, 0] :>=: 0,
-    [0, 0, 0, 1, -1] :>=: 0
-  ] ++ [asRational v :==: 2 | v <- toList vs]
+-- polytopeIncreasingConstraints :: VectorTypeSet -> [Constraint]
+-- polytopeIncreasingConstraints vs = [
+--     [1, 1, 1, 1, 1] :==: 3,
+--     [1, 0, 0, 0, 0] :<=: 1,
+--     [1, -1, 0, 0, 0] :>=: 0,
+--     [0, 1, -1, 0, 0] :>=: 0,
+--     [0, 0, 1, -1, 0] :>=: 0,
+--     [0, 0, 0, 1, -1] :>=: 0
+--   ] ++ [asRational v :==: 2 | v <- toList vs]
 
 polytopeConstraints :: VectorTypeSet -> [Constraint]
 polytopeConstraints vs = [

@@ -1,4 +1,4 @@
-module Vector (Vector, dimension, zero, unit, (|+|), (|-|), (|*|), dot) where
+module Vector (Vector, dimension, zero, unit, (|+|), (|-|), (|*|), dot, isZero) where
 
 import Utils (delta)
 import Data.List (genericReplicate, genericLength)
@@ -15,13 +15,22 @@ unit :: Num a => Integer -> Integer -> Vector a
 unit n i = [delta i k | k <- [1..n]]
 
 (|+|) :: Num a => Vector a -> Vector a -> Vector a
-(|+|) = zipWith (+)
+(v:vs) |+| (w:ws) = (v + w) : (vs |+| ws)
+[] |+| [] = []
+_ |+| _ = error "Vector addition not defined."
 
 (|-|) :: Num a => Vector a -> Vector a -> Vector a
-(|-|) = zipWith (-)
+(v:vs) |-| (w:ws) = (v - w) : (vs |-| ws)
+[] |-| [] = []
+_ |-| _ = error "Vector subtraction not defined."
 
 (|*|) :: Num a => a -> Vector a -> Vector a
 a |*| vs = [a * v | v <- vs]
 
 dot :: Num a => Vector a -> Vector a -> a
-dot v w = sum $ zipWith (*) v w
+(v:vs) `dot` (w:ws) = (v * w) + (vs `dot` ws)
+[] `dot` [] = 0
+_ `dot` _ = error "Scalar product not defined."
+
+isZero :: (Num a, Eq a) => Vector a -> Bool
+isZero = all (==0)

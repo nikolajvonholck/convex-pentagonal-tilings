@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5c0ed4901ae8f4e791fe92fa27be47a7c4239e28b3546f044d67efac47e3b459
+-- hash: 7fee0a9f2b650cc1275ea5d30a4aa8e1965b5638d1a6c761d0be1e9e35cd19ec
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
@@ -27,7 +27,10 @@ source-repository head
 
 library
   exposed-modules:
+      AffineSubspace
+      ConvexPolytope
       GoodSubsets
+      Interval
       Matrix
       Permutation
       Simplex

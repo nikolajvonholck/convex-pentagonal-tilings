@@ -1,8 +1,10 @@
-module Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy, delta) where
+module Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy, maxBy, extract, delta) where
 
 import qualified Data.List as List
-import Data.Foldable (minimumBy)
+import Data.Foldable (minimumBy, maximumBy)
 import Data.Ord (comparing)
+
+import Control.Monad (guard)
 
 -- | 1-indexed and generic version of '(!!)'.
 (!) :: [a] -> Integer -> a
@@ -27,6 +29,21 @@ replaceAt i x xs = List.genericTake (i - 1) xs ++ x : (List.genericDrop i xs)
 -- | Version of 'minimumBy' using default ordering.
 minBy :: (Foldable t, Ord a) => (b -> a) -> t b -> b
 minBy = minimumBy . comparing
+
+-- | Version of 'maximumBy' using default ordering.
+maxBy :: (Foldable t, Ord a) => (b -> a) -> t b -> b
+maxBy = maximumBy . comparing
+
+extract :: (a -> Bool) -> [a] -> Maybe ([a], (Integer, a), [a])
+extract p = (extract' p) . enumerate
+  where
+    extract' :: (a -> Bool) -> [(Integer, a)] -> Maybe ([a], (Integer, a), [a])
+    extract' _ [] = Nothing
+    extract' p' ((i, x):xs) = case extract' p' xs of
+      (Just (xs', ix, xs'')) -> Just (x:xs', ix, xs'')
+      Nothing -> do
+          guard $ p' x
+          return ([], (i, x), map snd xs)
 
 -- | Return 1 if 'y' equals 'x'; 0 otherwise.
 delta :: (Eq b, Num a) => b -> b -> a
