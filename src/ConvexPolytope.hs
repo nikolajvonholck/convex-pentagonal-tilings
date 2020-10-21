@@ -95,7 +95,7 @@ boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a
 boundedConvexPolytope strictness ass conds = do
     conds' <- withProjectedConditions strictness ass conds
     extr <- localExtremePoints ass conds'
-    fmap reduceConditions $ reduceDimensionality strictness ass conds' extr
+    reduceConditions <$> reduceDimensionality strictness ass conds' extr
 
 -- Condition is assumed normalized.
 cutHalfSpace :: (Fractional a, Ord a) => ConvexPolytope a -> Condition a -> Maybe (ConvexPolytope a)
@@ -112,7 +112,7 @@ cutHalfSpace (cp@(CP strictness ass conds extr)) cond =
         -- TODO: Should be impossible to add twice?
         let conds' = insert (cond, pc) conds
         extr' <- localExtremePoints ass conds'
-        fmap reduceConditions $ reduceDimensionality strictness ass conds' extr'
+        reduceConditions <$> reduceDimensionality strictness ass conds' extr'
 
 projectOntoHyperplane :: (Fractional a, Ord a) => ConvexPolytope a -> HyperPlane a -> Maybe (ConvexPolytope a)
 projectOntoHyperplane (cp@(CP strictness ass conds _)) hp =
@@ -122,7 +122,7 @@ projectOntoHyperplane (cp@(CP strictness ass conds _)) hp =
     else do
       conds' <- withProjectedConditions strictness ass' (Set.map fst conds)
       extr' <- localExtremePoints ass' conds'
-      fmap reduceConditions $ reduceDimensionality strictness ass' conds' extr'
+      reduceConditions <$> reduceDimensionality strictness ass' conds' extr'
 
 extremePoints :: (Num a, Ord a) => ConvexPolytope a -> Set (Vector a)
 extremePoints (CP _ ass _ extr) = Set.map (coordsInSpace ass) extr

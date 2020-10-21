@@ -16,11 +16,11 @@ enumerate = zip [1..]
 
 -- | 1-indexed and generic version of findIndex.
 findIndex :: (a -> Bool) -> [a] -> Maybe Integer
-findIndex f xs = fmap ((+1) . toInteger) $ List.findIndex f xs
+findIndex f xs = (+1) . toInteger <$> List.findIndex f xs
 
 -- | 1-indexed and generic version of elemIndex.
 elemIndex :: Eq a => a -> [a] -> Maybe Integer
-elemIndex x xs = fmap ((+1) . toInteger) $ List.elemIndex x xs
+elemIndex x xs = (+1) . toInteger <$> List.elemIndex x xs
 
 -- | 1-indexed replacement.
 replaceAt :: Integer -> a -> [a] -> [a]
