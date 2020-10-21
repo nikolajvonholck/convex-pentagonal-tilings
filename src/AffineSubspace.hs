@@ -7,8 +7,6 @@ import Utils (extract, delta)
 import Data.List (find, genericLength)
 import Data.Maybe (fromJust)
 
--- import Debug.Trace (traceShow)
-
 -- An (n-1)-dimensional hyper plane (HP t q) defined by: x * t = q.
 data HyperPlane a = HP (Vector a) a deriving (Show)
 

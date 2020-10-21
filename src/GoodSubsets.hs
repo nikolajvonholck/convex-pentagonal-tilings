@@ -8,7 +8,7 @@ import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
 import ConvexPolytope (ConvexPolytope, Strictness(..), condition, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
 
 import qualified Data.Set as Set
-import Data.Set (Set, fromList, insert, (\\), elems, union, empty)
+import Data.Set (Set, fromList, insert, (\\), elems, empty)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, member)
 import Data.List (genericLength, transpose)
@@ -68,11 +68,11 @@ inflate xs =
     return $ compatSet xs point
 
 recurse :: Map VectorTypeSet Bool
-recurse = recurse' empty initialAngleCP initialGoodnessCP empty Map.empty
+recurse = recurse' empty initialAngleCP initialGoodnessCP Map.empty
 
-recurse' :: VectorTypeSet -> Maybe (ConvexPolytope Rational) -> Maybe (ConvexPolytope Rational) -> Set VectorType -> Map VectorTypeSet Bool -> Map VectorTypeSet Bool
-recurse' _ Nothing _ _ maximalSets = maximalSets
-recurse' xs (Just angleCP) goodnessCP except maximalSets =
+recurse' :: VectorTypeSet -> Maybe (ConvexPolytope Rational) -> Maybe (ConvexPolytope Rational) -> Map VectorTypeSet Bool -> Map VectorTypeSet Bool
+recurse' _ Nothing _ maximalSets = maximalSets
+recurse' xs (Just angleCP) goodnessCP maximalSets =
   let (minX, maxX, minXpoints, maxXpoints) = minmax angleCP
   in if any (1<=) minX || any (0>=) maxX then maximalSets else
       let alpha = (1 / 2) |*| (head minXpoints |+| last maxXpoints) -- Pick any 'interior' point.
@@ -83,14 +83,12 @@ recurse' xs (Just angleCP) goodnessCP except maximalSets =
               maximalSets' = Map.insert compat good maximalSets
               u = constructU minX minXpoints alpha
               vs = constructV u minX
-              vsToCheck = elems $ vs \\ (compat `union` except)
-          in fst $ foldl (\(sets, exs) v ->
+              vsToCheck = elems $ vs \\ compat
+          in foldl (\maximalSets'' v ->
               let angleCP' = projectOntoHyperplane angleCP (HP (asRational v) 2)
                   goodnessCP' = (\cp -> cutHalfSpace cp (condition (asRational v) 0)) =<< goodnessCP
                   xs' = insert v xs
-                  except' = insert v exs
-                  sets' = recurse' xs' angleCP' goodnessCP' except' sets
-              in (sets', except')) (maximalSets', except) vsToCheck
+              in recurse' xs' angleCP' goodnessCP' maximalSets'') maximalSets' vsToCheck
 
 asRational :: Vector Integer -> Vector Rational
 asRational = fmap fromInteger

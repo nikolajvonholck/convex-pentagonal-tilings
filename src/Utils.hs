@@ -1,4 +1,4 @@
-module Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy, maxBy, extract, delta) where
+module Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy, maxBy, extract, delta, zipPedantic, zipWithPedantic) where
 
 import qualified Data.List as List
 import Data.Foldable (minimumBy, maximumBy)
@@ -48,3 +48,13 @@ extract p = (extract' p) . enumerate
 -- | Return 1 if 'y' equals 'x'; 0 otherwise.
 delta :: (Eq b, Num a) => b -> b -> a
 delta x y = if x == y then 1 else 0
+
+-- | Version of zip requiring lists to be of the same length.
+zipPedantic :: [a] -> [b] -> [(a, b)]
+zipPedantic [] [] = []
+zipPedantic (x:xs) (y:ys) = (x, y):zipPedantic xs ys
+zipPedantic _ _ = error "Will not zip lists of different lengths."
+
+-- | Variation of zipWith requiring lists to be of the same length.
+zipWithPedantic :: (a -> b -> c) -> [a] -> [b] -> [c]
+zipWithPedantic f xs ys = map (uncurry f) $ zipPedantic xs ys
