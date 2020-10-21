@@ -26,7 +26,7 @@ space n = ASS (zero n) (squareMatrix n delta) -- Is in normal form
 
 -- Converts coordinates with respect to the basis of the affine subspace into a
 -- point in the surrounding space.
-coordsInSpace :: (Num a, Show a) => AffineSubspace a -> Vector a -> Vector a
+coordsInSpace :: (Num a) => AffineSubspace a -> Vector a -> Vector a
 coordsInSpace (ASS p bs) x =
   let components = [c |*| b | (c, b) <- zip x bs] -- TODO: Assert same length.
   in foldl (|+|) p components
@@ -37,7 +37,7 @@ coordsInSpace (ASS p bs) x =
 --    b) The affine subspace is disjoint with the hyper plane.
 -- 2) The affine subspace intersects the hyper plane in an affine subspace of
 --    dimension decremented by one.
-intersectWithHyperPlane :: (Fractional a, Eq a, Show a) => AffineSubspace a -> HyperPlane a -> Maybe (AffineSubspace a)
+intersectWithHyperPlane :: (Fractional a, Eq a) => AffineSubspace a -> HyperPlane a -> Maybe (AffineSubspace a)
 intersectWithHyperPlane (ASS p bs) (HP t q) =
   case extract (\b -> t `dot` b /= 0) bs of
     -- The affine subspace is parallel to hyper plane.
@@ -50,7 +50,7 @@ intersectWithHyperPlane (ASS p bs) (HP t q) =
       in return $ normalize p' bs'
 
 -- Assumes matrix bs of basis vectors to have full rank. This is reasonable.
-normalize :: (Fractional a, Eq a, Show a) => Vector a -> Matrix a -> AffineSubspace a
+normalize :: (Fractional a, Eq a) => Vector a -> Matrix a -> AffineSubspace a
 normalize p bs =
   let bs' = reducedEchelonForm bs
       p' = foldl (\acc b' ->

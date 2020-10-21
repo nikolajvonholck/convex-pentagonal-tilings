@@ -31,7 +31,7 @@ initialAngleCP = fromJust $ do
       condition [0, 0, -1, 1, 0] 0,
       condition [0, 0, 0, -1, 1] 0,
       condition [0, 0, 0, 0, -1] 0
-    ]
+    ] -- 1 >= x_1 >= x_2 >= x_3 >= x_4 >= x_5 >= 0
 
 angleCP :: VectorTypeSet -> Maybe (ConvexPolytope Rational)
 angleCP vs =
@@ -50,9 +50,9 @@ minmax cp =
 initialGoodnessCP :: ConvexPolytope Rational
 initialGoodnessCP = fromJust $ do
   ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 0)
-  boundedConvexPolytope NonStrict ass $ fromList [ -- [-1, 1]^5
-      condition [1, 0, 0, 0, 0] 1, -- x_1 <= 1
-      condition [-1, 0, 0, 0, 0] 1, -- -x_1 <= 1 --> x_1 >= -1
+  boundedConvexPolytope NonStrict ass $ fromList [
+      condition [1, 0, 0, 0, 0] 1,
+      condition [-1, 0, 0, 0, 0] 1,
       condition [0, 1, 0, 0, 0] 1,
       condition [0, -1, 0, 0, 0] 1,
       condition [0, 0, 1, 0, 0] 1,
@@ -61,7 +61,7 @@ initialGoodnessCP = fromJust $ do
       condition [0, 0, 0, -1, 0] 1,
       condition [0, 0, 0, 0, 1] 1,
       condition [0, 0, 0, 0, -1] 1
-    ]
+    ] -- [-1, 1]^5
 
 goodnessCP :: VectorTypeSet -> Maybe (ConvexPolytope Rational)
 goodnessCP vs =
@@ -91,8 +91,7 @@ recurse xs maximalSets =
             compat = compatSet xs alpha
         in if member compat maximalSets then maximalSets
           else
-            let --compat' = traceShow ("goodness:", isGood compat == isGood2 compat) compat
-                maximalSets' = Map.insert compat (traceShow ("length compat", Set.size compat) (isGood2 compat)) maximalSets
+            let maximalSets' = Map.insert compat (traceShow ("length compat", Set.size compat) (isGood compat)) maximalSets
                 u = constructU minX minXpoints alpha
                 vs = constructV u minX
                 toCheck = toList (vs \\ compat)
@@ -112,21 +111,13 @@ compatSet xs alpha =
       isCompat x = all (\b -> x `dot` b == 0) orthogonalComplement
   in fromList [x | x <- candidates, isCompat (asRational x ++ [2])]
 
-isGood2 :: VectorTypeSet -> Bool
-isGood2 vs =
+isGood :: VectorTypeSet -> Bool
+isGood vs =
   case goodnessCP vs of
     Nothing -> True
     Just cp ->
       let extr = extremePoints cp
       in not $ any (\e -> any (\c -> e `dot` c < 0) (Set.map asRational vs)) extr
-
--- isGood :: VectorTypeSet -> Bool
--- isGood vs = -- TODO: Improve implementation of non-negetativity constraints.
---   let obj = Maximize (zero (5*2))
---       ext as = concat [[a, -a] | a <- as]
---       commonConstraints = (ext [1, 1, 1, 1, 1] :==: 0) : [ext (asRational w) :>=: 0 | w <- toList vs]
---       searches = [optimize obj $ (ext (asRational v) :>=: 1) : commonConstraints | v <- toList vs]
---   in all (==Infeasible) searches
 
 constructV :: Vector Rational -> Vector Rational -> VectorTypeSet
 constructV (u@[u1, u2, u3, u4, u5]) (minX@[minX1, minX2, minX3, minX4, minX5]) =
