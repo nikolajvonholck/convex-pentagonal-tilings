@@ -5,7 +5,7 @@ import Matrix (nullSpaceBasis)
 import Permutation (permute, symmetricGroup, dihedralGroup)
 import Utils (minBy, maxBy, (!))
 import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
-import ConvexPolytope (ConvexPolytope, Strictness(..), condition, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
+import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
 
 import qualified Data.Set as Set
 import Data.Set (Set, fromList, insert, (\\), elems, empty)
@@ -21,12 +21,12 @@ initialAngleCP :: Maybe (ConvexPolytope Rational)
 initialAngleCP = do
   ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 3)
   boundedConvexPolytope NonStrict ass $ fromList [
-      condition [1, 0, 0, 0, 0] 1,
-      condition [-1, 1, 0, 0, 0] 0,
-      condition [0, -1, 1, 0, 0] 0,
-      condition [0, 0, -1, 1, 0] 0,
-      condition [0, 0, 0, -1, 1] 0,
-      condition [0, 0, 0, 0, -1] 0
+      constraint [1, 0, 0, 0, 0] 1,
+      constraint [-1, 1, 0, 0, 0] 0,
+      constraint [0, -1, 1, 0, 0] 0,
+      constraint [0, 0, -1, 1, 0] 0,
+      constraint [0, 0, 0, -1, 1] 0,
+      constraint [0, 0, 0, 0, -1] 0
     ] -- 1 >= x_1 >= x_2 >= x_3 >= x_4 >= x_5 >= 0
 
 minmax :: ConvexPolytope Rational -> ([Rational], [Rational], [Vector Rational], [Vector Rational])
@@ -43,11 +43,11 @@ initialGoodnessCP :: Maybe (ConvexPolytope Rational)
 initialGoodnessCP = do
   ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 0)
   boundedConvexPolytope NonStrict ass $ fromList [
-      condition [-1, 0, 0, 0, 0] 1, condition [1, 0, 0, 0, 0] 1,
-      condition [0, -1, 0, 0, 0] 1, condition [0, 1, 0, 0, 0] 1,
-      condition [0, 0, -1, 0, 0] 1, condition [0, 0, 1, 0, 0] 1,
-      condition [0, 0, 0, -1, 0] 1, condition [0, 0, 0, 1, 0] 1,
-      condition [0, 0, 0, 0, -1] 1, condition [0, 0, 0, 0, 1] 1
+      constraint [-1, 0, 0, 0, 0] 1, constraint [1, 0, 0, 0, 0] 1,
+      constraint [0, -1, 0, 0, 0] 1, constraint [0, 1, 0, 0, 0] 1,
+      constraint [0, 0, -1, 0, 0] 1, constraint [0, 0, 1, 0, 0] 1,
+      constraint [0, 0, 0, -1, 0] 1, constraint [0, 0, 0, 1, 0] 1,
+      constraint [0, 0, 0, 0, -1] 1, constraint [0, 0, 0, 0, 1] 1
     ] -- [-1, 1]^5
 
 inflate :: VectorTypeSet -> Maybe VectorTypeSet
@@ -55,11 +55,11 @@ inflate xs =
   do
     ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 3)
     cp <- boundedConvexPolytope NonStrict ass $ fromList [
-        condition [-1, 0, 0, 0, 0] 0, condition [1, 0, 0, 0, 0] 1,
-        condition [0, -1, 0, 0, 0] 0, condition [0, 1, 0, 0, 0] 1,
-        condition [0, 0, -1, 0, 0] 0, condition [0, 0, 1, 0, 0] 1,
-        condition [0, 0, 0, -1, 0] 0, condition [0, 0, 0, 1, 0] 1,
-        condition [0, 0, 0, 0, -1] 0, condition [0, 0, 0, 0, 1] 1
+        constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
+        constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
+        constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,
+        constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
+        constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
       ] -- [0, 1]^5
     angleCP <- foldM projectOntoHyperplane cp [HP (asRational v) 2 | v <- elems xs]
     let points = elems $ extremePoints angleCP
@@ -79,14 +79,14 @@ recurse' xs (Just angleCP) goodnessCP maximalSets =
           compat = compatSet xs alpha
       in if member compat maximalSets then maximalSets
         else
-          let good = isGood compat $(\cp -> foldM cutHalfSpace cp [condition (asRational v) 0 | v <- elems $ compat \\ xs]) =<< goodnessCP
+          let good = isGood compat $(\cp -> foldM cutHalfSpace cp [constraint (asRational v) 0 | v <- elems $ compat \\ xs]) =<< goodnessCP
               maximalSets' = Map.insert compat good maximalSets
               u = constructU minX minXpoints alpha
               vs = constructV u minX
               vsToCheck = elems $ vs \\ compat
           in foldl (\maximalSets'' v ->
               let angleCP' = projectOntoHyperplane angleCP (HP (asRational v) 2)
-                  goodnessCP' = (\cp -> cutHalfSpace cp (condition (asRational v) 0)) =<< goodnessCP
+                  goodnessCP' = (\cp -> cutHalfSpace cp (constraint (asRational v) 0)) =<< goodnessCP
                   xs' = insert v xs
               in recurse' xs' angleCP' goodnessCP' maximalSets'') maximalSets' vsToCheck
 

@@ -1,4 +1,4 @@
-module ConvexPolytope (ConvexPolytope, Strictness(..), condition, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints) where
+module ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints) where
 
 import Vector (Vector, zero, (|-|), (|*|), dot, isZero)
 import Matrix (rank)
@@ -9,119 +9,119 @@ import Data.Set (Set, elems, partition, insert, fromList)
 import Data.List (find, tails)
 import Control.Monad (guard)
 
--- <= or < depending on strictness. Conditions should always be normalized, so
+-- <= or < depending on strictness. Constraints should always be normalized, so
 -- the constructor should be considered private.
-data Condition a = Cond (Vector a) a deriving (Eq, Ord, Show)
+data Constraint a = Constraint (Vector a) a deriving (Eq, Ord, Show)
 
 data Strictness = NonStrict | Strict deriving (Show)
 
--- CP strictness ass conds extr
-data ConvexPolytope a = CP Strictness (AffineSubspace a) (Set (Condition a, Condition a)) (Set (Vector a)) deriving (Show)
+-- CP strictness ass cs extr
+data ConvexPolytope a = CP Strictness (AffineSubspace a) (Set (Constraint a, Constraint a)) (Set (Vector a)) deriving (Show)
 
-condition :: (Fractional a, Ord a) => Vector a -> a -> Condition a
-condition vs q =
+constraint :: (Fractional a, Ord a) => Vector a -> a -> Constraint a
+constraint vs q =
   case find (/=0) vs of
-    (Just v) -> let c = abs (1 / v) in Cond (c |*| vs) (c * q)
-    Nothing -> Cond vs (signum q)
+    (Just v) -> let c = abs (1 / v) in Constraint (c |*| vs) (c * q)
+    Nothing -> Constraint vs (signum q)
 
-evaluateCondition :: (Num a, Ord a) => Condition a -> Vector a -> Ordering
-evaluateCondition (Cond vs q) x = (vs `dot` x) `compare` q
+evaluateConstraint :: (Num a, Ord a) => Constraint a -> Vector a -> Ordering
+evaluateConstraint (Constraint vs q) x = (vs `dot` x) `compare` q
 
-satisfiesCondition :: (Num a, Ord a) => Strictness -> Condition a -> Vector a -> Bool
-satisfiesCondition Strict  cond x = evaluateCondition cond x == LT
-satisfiesCondition NonStrict cond x = evaluateCondition cond x /= GT
+satisfiesConstraint :: (Num a, Ord a) => Strictness -> Constraint a -> Vector a -> Bool
+satisfiesConstraint Strict  c x = evaluateConstraint c x == LT
+satisfiesConstraint NonStrict c x = evaluateConstraint c x /= GT
 
-projectCondition :: (Fractional a, Ord a) => AffineSubspace a -> Condition a -> Condition a
-projectCondition (ASS p bs) (Cond vs q) =
+projectConstraint :: (Fractional a, Ord a) => AffineSubspace a -> Constraint a -> Constraint a
+projectConstraint (ASS p bs) (Constraint vs q) =
   let vs' = [vs `dot` b | b <- bs]
       q' = q - (p `dot` vs)
-  in condition vs' q'
+  in constraint vs' q'
 
 -- Maintains the invariant if Just extr then extr is non-empty.
-localExtremePoints :: (Fractional a, Ord a) => AffineSubspace a -> Set (Condition a, Condition a) -> Maybe (Set (Vector a))
-localExtremePoints ass conds =
+localExtremePoints :: (Fractional a, Ord a) => AffineSubspace a -> Set (Constraint a, Constraint a) -> Maybe (Set (Vector a))
+localExtremePoints ass cs =
   let d = dimension ass
-      projectedConds = Set.map snd conds
-      extr = helper projectedConds (space d) (elems projectedConds)
+      projectedConstraints = Set.map snd cs
+      extr = helper projectedConstraints (space d) (elems projectedConstraints)
   in if extr == [] then Nothing else Just $ fromList extr
   where
-    helper :: (Fractional a, Ord a) => Set (Condition a) -> AffineSubspace a -> [Condition a] -> [Vector a]
+    helper :: (Fractional a, Ord a) => Set (Constraint a) -> AffineSubspace a -> [Constraint a] -> [Vector a]
     helper pcs (ASS p []) _ = -- The space is zero-dimensional, i.e. a single point.
-      [p | all (\pc -> satisfiesCondition NonStrict pc p) pcs]
+      [p | all (\pc -> satisfiesConstraint NonStrict pc p) pcs]
     helper pcs subspace toCheck =
-      concat [ helper pcs subspace' cs | sublist <- tails toCheck,
+      concat [ helper pcs subspace' cs' | sublist <- tails toCheck,
                  sublist /= [],
-                 let (Cond vs q):cs = sublist,
+                 let (Constraint vs q):cs' = sublist,
                  let intersection = intersectWithHyperPlane subspace (HP vs q),
                  intersection /= Nothing,
                  let Just subspace' = intersection]
 
--- Returns Nothing if some condition is violated.
-withProjectedConditions :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Condition a) -> Maybe (Set (Condition a, Condition a))
-withProjectedConditions strictness ass conds =
+-- Returns Nothing if some constraint is violated.
+withProjectedConstraints :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Constraint a) -> Maybe (Set (Constraint a, Constraint a))
+withProjectedConstraints strictness ass cs =
   do
-    let projectedConds = Set.map (\cond -> (cond, projectCondition ass cond)) conds
-    let (zeroConds, newConds) = partition (\(_, (Cond vs _)) -> isZero vs) projectedConds
+    let projectedConstraints = Set.map (\c -> (c, projectConstraint ass c)) cs
+    let (zeroConstraints, newConstraints) = partition (\(_, (Constraint vs _)) -> isZero vs) projectedConstraints
     let d = dimension ass
-    guard $ all (\(_, pc) -> satisfiesCondition strictness pc (zero d)) zeroConds -- Check if condition has been violated.
-    return newConds
+    guard $ all (\(_, pc) -> satisfiesConstraint strictness pc (zero d)) zeroConstraints -- Check if constraint has been violated.
+    return newConstraints
 
 -- Assumes that extr is non-empty.
-reduceDimensionality :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Condition a, Condition a) -> Set (Vector a) -> Maybe (ConvexPolytope a)
-reduceDimensionality strictness ass conds extr =
-  case find (\(_, pc) -> all (\e -> evaluateCondition pc e == EQ) extr) (elems conds) of
-    Nothing -> Just $ CP strictness ass conds extr -- Dimensionality cannot be simplified further.
-    Just (Cond vs q, _) -> case strictness of
+reduceDimensionality :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Constraint a, Constraint a) -> Set (Vector a) -> Maybe (ConvexPolytope a)
+reduceDimensionality strictness ass cs extr =
+  case find (\(_, pc) -> all (\e -> evaluateConstraint pc e == EQ) extr) (elems cs) of
+    Nothing -> Just $ CP strictness ass cs extr -- Dimensionality cannot be simplified further.
+    Just (Constraint vs q, _) -> case strictness of
       Strict -> Nothing -- Solution set is empty.
-      NonStrict -> -- Project everything onto the hyperplane defined by the condition.
+      NonStrict -> -- Project everything onto the hyperplane defined by the constraint.
         do
           -- The following three calls should theoretically always succeed.
           ass' <- intersectWithHyperPlane ass (HP vs q)
-          conds' <- withProjectedConditions strictness ass' $ Set.map fst conds
-          extr' <- localExtremePoints ass' conds'
-          reduceDimensionality strictness ass' conds' extr' -- Recursively simplify.
+          cs' <- withProjectedConstraints strictness ass' $ Set.map fst cs
+          extr' <- localExtremePoints ass' cs'
+          reduceDimensionality strictness ass' cs' extr' -- Recursively simplify.
 
-reduceConditions :: (Fractional a, Ord a) => ConvexPolytope a -> ConvexPolytope a
-reduceConditions (CP strictness ass conds extr) =
+reduceConstraints :: (Fractional a, Ord a) => ConvexPolytope a -> ConvexPolytope a
+reduceConstraints (CP strictness ass cs extr) =
   let d = dimension ass
-      conditionsNeeded = Set.filter (\(_, pc) ->
-        let points = Set.filter (\e -> evaluateCondition pc e == EQ) extr
+      constraintsNeeded = Set.filter (\(_, pc) ->
+        let points = Set.filter (\e -> evaluateConstraint pc e == EQ) extr
         in case elems points of
           [] -> False
-          (p0:ps) -> rank [p |-| p0 | p <- ps] == d - 1) conds
-  in CP strictness ass conditionsNeeded extr
+          (p0:ps) -> rank [p |-| p0 | p <- ps] == d - 1) cs
+  in CP strictness ass constraintsNeeded extr
 
-boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Condition a) -> Maybe (ConvexPolytope a)
-boundedConvexPolytope strictness ass conds = do
-    conds' <- withProjectedConditions strictness ass conds
-    extr <- localExtremePoints ass conds'
-    reduceConditions <$> reduceDimensionality strictness ass conds' extr
+boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Constraint a) -> Maybe (ConvexPolytope a)
+boundedConvexPolytope strictness ass cs = do
+    cs' <- withProjectedConstraints strictness ass cs
+    extr <- localExtremePoints ass cs'
+    reduceConstraints <$> reduceDimensionality strictness ass cs' extr
 
--- Condition is assumed normalized.
-cutHalfSpace :: (Fractional a, Ord a) => ConvexPolytope a -> Condition a -> Maybe (ConvexPolytope a)
-cutHalfSpace (cp@(CP strictness ass conds extr)) cond =
+-- Constraint is assumed normalized.
+cutHalfSpace :: (Fractional a, Ord a) => ConvexPolytope a -> Constraint a -> Maybe (ConvexPolytope a)
+cutHalfSpace (cp@(CP strictness ass cs extr)) c =
   do
-    let pc = projectCondition ass cond
-    let evaluations = Set.map (satisfiesCondition strictness pc) extr
+    let pc = projectConstraint ass c
+    let evaluations = Set.map (satisfiesConstraint strictness pc) extr
     -- Ensure that at least one of the existing extreme points lies in the half space.
     guard (any id evaluations) -- Otherwise solution set is empty.
-    if all id evaluations -- The condition is superfluous.
+    if all id evaluations -- The constraint is superfluous.
       then return cp
       else do
-        -- This is why it is important that cond is normalized to not add the same condition twice.
-        let conds' = insert (cond, pc) conds
-        extr' <- localExtremePoints ass conds'
-        reduceConditions <$> reduceDimensionality strictness ass conds' extr'
+        -- This is why it is important that constraint is normalized to not add the same constraint twice.
+        let cs' = insert (c, pc) cs
+        extr' <- localExtremePoints ass cs'
+        reduceConstraints <$> reduceDimensionality strictness ass cs' extr'
 
 projectOntoHyperplane :: (Fractional a, Ord a) => ConvexPolytope a -> HyperPlane a -> Maybe (ConvexPolytope a)
-projectOntoHyperplane (cp@(CP strictness ass conds _)) hp =
+projectOntoHyperplane (cp@(CP strictness ass cs _)) hp =
   do
     ass' <- intersectWithHyperPlane ass hp
     if ass' == ass then return cp -- Projection does not change anything.
     else do
-      conds' <- withProjectedConditions strictness ass' (Set.map fst conds)
-      extr' <- localExtremePoints ass' conds'
-      reduceConditions <$> reduceDimensionality strictness ass' conds' extr'
+      cs' <- withProjectedConstraints strictness ass' (Set.map fst cs)
+      extr' <- localExtremePoints ass' cs'
+      reduceConstraints <$> reduceDimensionality strictness ass' cs' extr'
 
 extremePoints :: (Num a, Ord a) => ConvexPolytope a -> Set (Vector a)
 extremePoints (CP _ ass _ extr) = Set.map (coordsInSpace ass) extr
