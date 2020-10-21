@@ -72,31 +72,25 @@ recurse = recurse' empty initialAngleCP initialGoodnessCP empty Map.empty
 
 recurse' :: VectorTypeSet -> Maybe (ConvexPolytope Rational) -> Maybe (ConvexPolytope Rational) -> Set VectorType -> Map VectorTypeSet Bool -> Map VectorTypeSet Bool
 recurse' _ Nothing _ _ maximalSets = maximalSets
-recurse' xs (Just cpa) cpg except maximalSets =
-  let (minX, maxX, minXpoints, maxXpoints) = minmax cpa
+recurse' xs (Just angleCP) goodnessCP except maximalSets =
+  let (minX, maxX, minXpoints, maxXpoints) = minmax angleCP
   in if any (1<=) minX || any (0>=) maxX then maximalSets else
       let alpha = (1 / 2) |*| (head minXpoints |+| last maxXpoints) -- Pick any 'interior' point.
           compat = compatSet xs alpha
       in if member compat maximalSets then maximalSets
         else
-          let cpgoodness = do
-                cp <- cpg
-                foldM cutHalfSpace cp [condition (asRational v) 0 | v <- elems $ compat \\ xs]
-              good = isGood cpgoodness compat
+          let good = isGood compat $(\cp -> foldM cutHalfSpace cp [condition (asRational v) 0 | v <- elems $ compat \\ xs]) =<< goodnessCP
               maximalSets' = Map.insert compat good maximalSets
               u = constructU minX minXpoints alpha
               vs = constructV u minX
-              toCheck = elems $ vs \\ (compat `union` except)
-              (res, _) = foldl (\(maximals, exs) v ->
-                let xs' = insert v xs
-                    cpa' = projectOntoHyperplane cpa (HP (asRational v) 2) -- maybe
-                    cpg' = do
-                      cp <- cpg
-                      cutHalfSpace cp (condition (asRational v) 0)
-                    exs' = insert v exs
-                    gs = recurse' xs' cpa' cpg' exs' maximals
-                in (gs, exs')) (maximalSets', except) toCheck
-          in res
+              vsToCheck = elems $ vs \\ (compat `union` except)
+          in fst $ foldl (\(sets, exs) v ->
+              let angleCP' = projectOntoHyperplane angleCP (HP (asRational v) 2)
+                  goodnessCP' = (\cp -> cutHalfSpace cp (condition (asRational v) 0)) =<< goodnessCP
+                  xs' = insert v xs
+                  except' = insert v exs
+                  sets' = recurse' xs' angleCP' goodnessCP' except' sets
+              in (sets', except')) (maximalSets', except) vsToCheck
 
 asRational :: Vector Integer -> Vector Rational
 asRational = fmap fromInteger
@@ -112,11 +106,11 @@ compatSet xs alpha =
       isCompat x = all (\b -> x `dot` b == 0) orthogonalComplement
   in fromList [x | x <- candidates, isCompat (asRational x ++ [2])]
 
-isGood :: Maybe (ConvexPolytope Rational) -> VectorTypeSet -> Bool
-isGood Nothing _ = True
-isGood (Just cp) vs =
-  let extr = extremePoints cp
-  in not $ any (\e -> any (\c -> e `dot` asRational c < 0) vs) extr
+isGood :: VectorTypeSet -> Maybe (ConvexPolytope Rational) -> Bool
+isGood _ Nothing = True
+isGood compat (Just goodnessCP) =
+  let extr = extremePoints goodnessCP
+  in not $ any (\e -> any (\c -> e `dot` asRational c < 0) compat) extr
 
 constructV :: Vector Rational -> Vector Rational -> VectorTypeSet
 constructV (u@[u1, u2, u3, u4, u5]) (minX@[minX1, minX2, minX3, minX4, minX5]) =
