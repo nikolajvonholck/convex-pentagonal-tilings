@@ -19,7 +19,7 @@ isElementOf :: (Num a, Ord a) => Interval a -> a -> Bool
 isElementOf (I (a, b)) x = a <= x && x <= b
 
 extendWith :: Ord a => Interval a -> a -> Interval a
-extendWith (I (a, b)) x = I (min a x, max b x) -- TODO: Conside implementing using leastContainingInterval and fromElement
+extendWith i x = leastContainingInterval i $ fromElement x
 
 width :: Num a => Interval a -> a
 width (I (a, b)) = b - a

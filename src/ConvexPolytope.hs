@@ -108,8 +108,7 @@ cutHalfSpace (cp@(CP strictness ass conds extr)) cond =
     if all id evaluations -- The condition is superfluous.
       then return cp
       else do
-        -- TODO: Here it is important that cond is normalized to not add the same condition twice.
-        -- TODO: Should be impossible to add twice?
+        -- This is why it is important that cond is normalized to not add the same condition twice.
         let conds' = insert (cond, pc) conds
         extr' <- localExtremePoints ass conds'
         reduceConditions <$> reduceDimensionality strictness ass conds' extr'

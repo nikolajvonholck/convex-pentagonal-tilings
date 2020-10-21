@@ -2,7 +2,7 @@ module AffineSubspace (AffineSubspace (..), HyperPlane (..), dimension, space, c
 
 import Vector (Vector, (|+|), (|-|), (|*|), dot, zero)
 import Matrix (Matrix, squareMatrix, reducedEchelonForm)
-import Utils (extract, delta)
+import Utils (extract, delta, zipWithPedantic)
 
 import Data.List (find, genericLength)
 import Data.Maybe (fromJust)
@@ -26,7 +26,7 @@ space n = ASS (zero n) (squareMatrix n delta) -- Is in normal form
 -- point in the surrounding space.
 coordsInSpace :: (Num a) => AffineSubspace a -> Vector a -> Vector a
 coordsInSpace (ASS p bs) x =
-  let components = [c |*| b | (c, b) <- zip x bs] -- TODO: Assert same length.
+  let components = zipWithPedantic (|*|) x bs
   in foldl (|+|) p components
 
 -- There are three possible scenarios:
@@ -53,7 +53,7 @@ normalize p bs =
   let bs' = reducedEchelonForm bs
       p' = foldl (\acc b' ->
           fromJust $ do
-            (_, y) <- find ((/=0) . fst) (zip b' acc) -- TODO: Assert first coord 'x' in (x, y) is 1.
+            (1, y) <- find ((/=0) . fst) (zip b' acc)
             return $ acc |-| (y |*| b')
         ) p bs' -- Assumes all rows are pivot rows, i.e. full rank.
   in ASS p' bs'
