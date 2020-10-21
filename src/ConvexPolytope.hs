@@ -1,6 +1,7 @@
 module ConvexPolytope (ConvexPolytope, Strictness(..), condition, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints) where
 
-import Vector (Vector, zero, (|*|), dot, isZero)
+import Vector (Vector, zero, (|-|), (|*|), dot, isZero)
+import Matrix (rank)
 import AffineSubspace (AffineSubspace (..), HyperPlane (..), coordsInSpace, dimension, space, intersectWithHyperPlane)
 
 import qualified Data.Set as Set
@@ -90,6 +91,25 @@ reduceConditions strictness ass conds extr =
 
 -- TODO: Line 517: desc.
 
+reduceConditions2 :: (Fractional a, Ord a, Show a) => ConvexPolytope a -> ConvexPolytope a
+reduceConditions2 (CP strictness ass conds extr) =
+  let conds' = Set.filter (isNeeded ass extr) conds
+  in CP strictness ass conds' extr
+  where
+    isNeeded :: (Fractional a, Ord a, Show a) => AffineSubspace a -> Set (Vector a) -> (Condition a, Condition a) -> Bool
+    isNeeded asss extre (_, pc) =
+      let d = dimension asss
+          points = Set.filter (\e -> evaluateCondition pc e == EQ) extre
+      in case elems points of
+        [] -> False
+        (p:ps) ->
+          let mat = map (|-|p) ps
+              rg = rank mat
+          in case rg `compare` (d-1) of
+            LT -> False
+            EQ -> True
+            GT -> error "Imp."
+
 --- PUBLIC ---
 --- :::::::::::::::::::::: ---
 --- :::::::::::::::::::::: ---
@@ -100,7 +120,8 @@ boundedConvexPolytope :: (Fractional a, Ord a, Show a) => Strictness -> AffineSu
 boundedConvexPolytope strictness ass conds = do
     conds' <- withProjectedConditions strictness ass conds
     extr <- localExtremePoints ass conds'
-    reduceConditions strictness ass conds' extr
+    reduced <- reduceConditions strictness ass conds' extr
+    return $ reduceConditions2 reduced
     -- TODO: recomp_d (remove more conditions..)
 
 -- Condition is assumed normalized.
@@ -120,7 +141,8 @@ cutHalfSpace (cp@(CP strictness ass conds extr)) cond =
         -- TODO: Should be impossible to add twice?
         let conds' = insert (cond, pc) conds
         extr' <- localExtremePoints ass conds'
-        reduceConditions strictness ass conds' extr'
+        reduced <- reduceConditions strictness ass conds' extr'
+        return $ reduceConditions2 reduced
         -- TODO: recomp_d (remove more conditions..)
 
 -- proj
@@ -131,7 +153,8 @@ projectOntoHyperplane (CP strictness ass conds _) hp =
     -- TODO: Consider short curcuit if ass == ass' (Rao check if has same dimensions)
     conds' <- withProjectedConditions strictness ass' (Set.map fst conds)
     extr' <- localExtremePoints ass' conds'
-    reduceConditions strictness ass' conds' extr'
+    reduced <- reduceConditions strictness ass' conds' extr'
+    return $ reduceConditions2 reduced
     -- TODO: recomp_d (remove more conditions..)
 
 extremePoints :: (Num a, Ord a, Show a) => ConvexPolytope a -> Set (Vector a)

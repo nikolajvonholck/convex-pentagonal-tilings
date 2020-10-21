@@ -1,7 +1,7 @@
-module Matrix (Matrix, reducedEchelonForm, nullSpaceBasis, matrixVectorProduct, mRows, nCols, squareMatrix) where
+module Matrix (Matrix, reducedEchelonForm, nullSpaceBasis, matrixVectorProduct, mRows, nCols, squareMatrix, rank) where
 
 import Utils ((!), enumerate, findIndex, delta)
-import Vector (Vector, dimension, unit, (|*|), dot)
+import Vector (Vector, dimension, unit, (|*|), dot, isZero)
 
 import Data.List (transpose, find, (\\))
 import Data.Maybe (catMaybes)
@@ -37,6 +37,9 @@ swapRows i j xss =
           if r == j then delta i c
           else delta r c)
   in elemMatrix |.| xss
+
+rank :: (Fractional a, Eq a) => Matrix a -> Integer
+rank ms = mRows $ filter (not . isZero) $ reducedEchelonForm ms
 
 reducedEchelonForm :: (Fractional a, Eq a) => Matrix a -> Matrix a
 reducedEchelonForm [] = []
