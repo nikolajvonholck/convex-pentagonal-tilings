@@ -1,6 +1,6 @@
-module Vector (Vector, dimension, zero, unit, (|+|), (|-|), (|*|), dot) where
+module Vector (Vector, dimension, zero, unit, (|+|), (|-|), (|*|), dot, isZero) where
 
-import Utils (delta)
+import Utils (delta, zipWithPedantic)
 import Data.List (genericReplicate, genericLength)
 
 type Vector a = [a]
@@ -15,13 +15,16 @@ unit :: Num a => Integer -> Integer -> Vector a
 unit n i = [delta i k | k <- [1..n]]
 
 (|+|) :: Num a => Vector a -> Vector a -> Vector a
-(|+|) = zipWith (+)
+(|+|) = zipWithPedantic (+)
 
 (|-|) :: Num a => Vector a -> Vector a -> Vector a
-(|-|) = zipWith (-)
+(|-|) = zipWithPedantic (-)
 
 (|*|) :: Num a => a -> Vector a -> Vector a
-a |*| vs = [a * v | v <- vs]
+(|*|) a = map (a*)
 
 dot :: Num a => Vector a -> Vector a -> a
-dot v w = sum $ zipWith (*) v w
+dot vs ws = sum $ zipWithPedantic (*) vs ws
+
+isZero :: (Num a, Eq a) => Vector a -> Bool
+isZero = all (==0)

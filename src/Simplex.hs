@@ -23,10 +23,10 @@ data Objective = Maximize (Vector Rational)
                deriving (Show, Eq)
 
 -- (A, b, c)
-type StandardForm = (Matrix, Vector Rational, Vector Rational)
+type StandardForm = (Matrix Rational, Vector Rational, Vector Rational)
 
 -- B, A, b, c, nu
-type SlackForm = ([Integer], Matrix, Vector Rational, Vector Rational, Rational)
+type SlackForm = ([Integer], Matrix Rational, Vector Rational, Vector Rational, Rational)
 
 optimize :: Objective -> [Constraint] -> Solution
 optimize obj constraints =
@@ -41,7 +41,7 @@ toStdForm :: Objective -> [Constraint] -> StandardForm
 toStdForm (Minimize cs) consts = toStdForm (Maximize ((-1) |*| cs)) consts
 toStdForm (Maximize cs) consts = let (ass, bs) = toStdConsts consts in (ass, bs, cs)
   where
-    toStdConsts :: [Constraint] -> (Matrix, Vector Rational)
+    toStdConsts :: [Constraint] -> (Matrix Rational, Vector Rational)
     toStdConsts ((coefs :==: b):as) = toStdConsts $ (coefs :<=: b):(coefs :>=: b):as
     toStdConsts ((coefs :>=: b):as) = toStdConsts $ (((-1) |*| coefs) :<=: negate b):as
     toStdConsts ((coefs :<=: b):as) = let (ass, bs) = toStdConsts as in (coefs:ass, b:bs)
