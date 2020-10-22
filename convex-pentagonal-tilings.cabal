@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 902355f47841f33186ff7125fd457e1ab3d1e485a11558f5bb6cfc22438d2e59
+-- hash: aac0e4519acd792dcd3b8788448806e7f7ab767dd9c75508d83c0d907ecc2505
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
