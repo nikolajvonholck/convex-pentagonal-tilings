@@ -8,7 +8,7 @@ import qualified Data.Map.Strict as Map
 main :: IO ()
 main = do
   putStrLn "Will determine all non-empty maximal good sets..."
-  let maximalSets = recurse empty Map.empty
+  let maximalSets = recurse
   let maximalGoodSets = Map.filter id maximalSets
   let nonEmptyMaximalGoodSets = Map.keysSet maximalGoodSets \\ singleton empty
   print $ size nonEmptyMaximalGoodSets -- 193 √

@@ -1,32 +1,35 @@
-module Matrix (Matrix, reducedEchelonForm, nullSpaceBasis) where
+module Matrix (Matrix, reducedEchelonForm, nullSpaceBasis, matrixVectorProduct, mRows, nCols, squareMatrix, rank) where
 
 import Utils ((!), enumerate, findIndex, delta)
-import Vector (Vector, dimension, unit, (|*|), dot)
+import Vector (Vector, dimension, unit, (|*|), dot, isZero)
 
 import Data.List (transpose, find, (\\))
 import Data.Maybe (catMaybes)
 
-type Matrix = Vector (Vector Rational)
+type Matrix a = Vector (Vector a)
 
-mRows :: Matrix -> Integer
+mRows :: Matrix a -> Integer
 mRows = dimension
 
-nCols :: Matrix -> Integer
+nCols :: Matrix a -> Integer
 nCols = dimension . head
 
-dimensions :: Matrix -> (Integer, Integer)
+dimensions :: Matrix a -> (Integer, Integer)
 dimensions xss = (mRows xss, nCols xss)
 
-(|.|) :: Matrix -> Matrix -> Matrix
+(|.|) :: Num a => Matrix a -> Matrix a -> Matrix a
 m |.| n = [[row `dot` col | col <- transpose n] | row <- m]
 
-matrix :: Integer -> Integer -> (Integer -> Integer -> Rational) -> Matrix
+matrixVectorProduct :: Num a => Matrix a -> Vector a -> Vector a
+matrixVectorProduct m v = map (`dot` v) m
+
+matrix :: Num a => Integer -> Integer -> (Integer -> Integer -> a) -> Matrix a
 matrix m n entry = [[entry i j | j <- [1..n]] | i <- [1..m]]
 
-squareMatrix :: Integer -> (Integer -> Integer -> Rational) -> Matrix
+squareMatrix :: Num a => Integer -> (Integer -> Integer -> a) -> Matrix a
 squareMatrix n = matrix n n
 
-swapRows :: Integer -> Integer -> Matrix -> Matrix
+swapRows :: Num a => Integer -> Integer -> Matrix a -> Matrix a
 swapRows i j xss =
   let m = mRows xss
       elemMatrix = squareMatrix m (\r c ->
@@ -35,10 +38,14 @@ swapRows i j xss =
           else delta r c)
   in elemMatrix |.| xss
 
-reducedEchelonForm :: Matrix -> Matrix
-reducedEchelonForm = reduceFromCol (1, 1)
+rank :: (Fractional a, Eq a) => Matrix a -> Integer
+rank ms = mRows $ filter (not . isZero) $ reducedEchelonForm ms
+
+reducedEchelonForm :: (Fractional a, Eq a) => Matrix a -> Matrix a
+reducedEchelonForm [] = []
+reducedEchelonForm ms = reduceFromCol (1, 1) ms
   where
-    reduceFromCol :: (Integer, Integer) -> Matrix -> Matrix
+    reduceFromCol :: (Fractional a, Eq a) => (Integer, Integer) -> Matrix a -> Matrix a
     reduceFromCol (col, topRow) xss =
       let (m, n) = dimensions xss in
         if col > n || topRow > m then xss -- Reduction complete.
@@ -54,10 +61,10 @@ reducedEchelonForm = reduceFromCol (1, 1)
                   pivotInTop = swapRows topRow pivotRow $ rowOpsMatrix |.| xss
               in reduceFromCol (col + 1, topRow + 1) pivotInTop -- Next column.
 
-nullSpaceBasis :: Matrix -> [Vector Rational]
+nullSpaceBasis :: (Fractional a, Eq a) => Matrix a -> [Vector a]
 nullSpaceBasis = makeBasis . reducedEchelonForm
   where
-    makeBasis :: Matrix -> [Vector Rational]
+    makeBasis :: (Num a, Eq a) => Matrix a -> [Vector a]
     makeBasis xss =
       let n = nCols xss
           pivotIndices = catMaybes $ [findIndex (/=0) row | row <- xss]
