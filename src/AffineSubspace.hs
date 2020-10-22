@@ -41,7 +41,7 @@ intersectWithHyperPlane (ASS p bs) (HP t q) =
     -- The affine subspace is parallel to hyper plane.
     Nothing -> if p `dot` t == q then Just (ASS p bs) else Nothing
     -- The affine subspace intersects the hyper plane.
-    Just (vs', (_, u), vs'') ->
+    Just (vs', u, vs'') ->
       let r = t `dot` u -- The value r is non-zero.
           p' = p |+| (((q - p `dot` t) / r) |*| u)
           bs' = [v |-| ((t `dot` v / r) |*| u) | v <- vs' ++ vs'']

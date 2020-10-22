@@ -4,8 +4,6 @@ import qualified Data.List as List
 import Data.Foldable (minimumBy, maximumBy)
 import Data.Ord (comparing)
 
-import Control.Monad (guard)
-
 -- | 1-indexed and generic version of '(!!)'.
 (!) :: [a] -> Integer -> a
 xs ! n = xs `List.genericIndex` (n - 1)
@@ -34,16 +32,12 @@ minBy = minimumBy . comparing
 maxBy :: (Foldable t, Ord a) => (b -> a) -> t b -> b
 maxBy = maximumBy . comparing
 
-extract :: (a -> Bool) -> [a] -> Maybe ([a], (Integer, a), [a])
-extract p = (extract' p) . enumerate
-  where
-    extract' :: (a -> Bool) -> [(Integer, a)] -> Maybe ([a], (Integer, a), [a])
-    extract' _ [] = Nothing
-    extract' p' ((i, x):xs) = case extract' p' xs of
-      (Just (xs', ix, xs'')) -> Just (x:xs', ix, xs'')
-      Nothing -> do
-          guard $ p' x
-          return ([], (i, x), map snd xs)
+extract :: (a -> Bool) -> [a] -> Maybe ([a], a, [a])
+extract _ [] = Nothing
+extract p (x:xs) = if p x then Just ([], x, xs) else
+  do
+    (xs', x', xs'') <- extract p xs
+    return $ (x:xs', x', xs'')
 
 -- | Return 1 if 'y' equals 'x'; 0 otherwise.
 delta :: (Eq b, Num a) => b -> b -> a

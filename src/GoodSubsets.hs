@@ -79,7 +79,7 @@ recurse' xs (Just angleCP) goodnessCP maximalSets =
           compat = compatSet xs alpha
       in if member compat maximalSets then maximalSets
         else
-          let good = isGood compat $(\cp -> foldM cutHalfSpace cp [constraint (asRational v) 0 | v <- elems $ compat \\ xs]) =<< goodnessCP
+          let good = isGood compat $ (\cp -> foldM cutHalfSpace cp [constraint (asRational v) 0 | v <- elems $ compat \\ xs]) =<< goodnessCP
               maximalSets' = Map.insert compat good maximalSets
               u = constructU minX minXpoints alpha
               vs = constructV u minX
