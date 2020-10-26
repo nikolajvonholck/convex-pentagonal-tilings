@@ -1,14 +1,20 @@
-module Interval (Interval, fromElement, toInterval, leastContainingInterval, isElementOf, extendWith, width, midpoint, add, neg, sub, scale) where
+module Interval (Interval, begin, end, fromElement, interval, leastContainingInterval, isElementOf, extendWith, width, midpoint, add, neg, sub, scale) where
 
 -- import Data.Ord (min, max)
 
 data Interval a = I (a, a) deriving (Eq)
 
+begin :: Interval a -> a
+begin (I (a, _)) = a
+
+end :: Interval a -> a
+end (I (_, b)) = b
+
 fromElement :: a -> Interval a
 fromElement x = I (x, x)
 
-toInterval :: Ord a => a -> a -> Interval a
-toInterval a b
+interval :: Ord a => (a, a) -> Interval a
+interval (a, b)
   | a <= b = I (a, b)
   | otherwise = error "Degenerate interval."
 
