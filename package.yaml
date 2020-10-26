@@ -49,3 +49,4 @@ tests:
     - convex-pentagonal-tilings
     - tasty
     - tasty-hunit
+    - tasty-quickcheck

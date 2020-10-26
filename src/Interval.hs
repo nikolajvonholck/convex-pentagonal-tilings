@@ -1,8 +1,8 @@
-module Interval (Interval, begin, end, fromElement, interval, leastContainingInterval, isElementOf, extendWith, width, midpoint, add, neg, sub, scale) where
+module Interval (Interval, begin, end, fromElement, interval, leastContainingInterval, isElementOf, extendWith, width, midpoint) where
 
 -- import Data.Ord (min, max)
 
-data Interval a = I (a, a) deriving (Eq)
+data Interval a = I (a, a) deriving (Eq, Show)
 
 begin :: Interval a -> a
 begin (I (a, _)) = a
@@ -32,17 +32,3 @@ width (I (a, b)) = b - a
 
 midpoint :: Fractional a => Interval a -> a
 midpoint (I (a, b)) = (a + b) / 2
-
-add :: Num a => Interval a -> Interval a -> Interval a
-add (I (a1, b1)) (I (a2, b2)) = I (a1 + a2, b1 + b2)
-
-neg :: Num a => Interval a -> Interval a
-neg (I (a, b)) = I (-b, -a)
-
-sub :: Num a => Interval a -> Interval a -> Interval a
-sub i1 i2 = add i1 (neg i2)
-
-scale :: (Num a, Ord a) => Interval a -> a -> Interval a
-scale (I (a, b)) m
-  | m >= 0 = I (m * a, m * b)
-  | otherwise  = I (m * b, m * a)
