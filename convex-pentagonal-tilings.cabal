@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3c35b322f8fc4c76e862e1d9488fc6b609880cec68b6564f281b4c576c234d3d
+-- hash: df71778a3c6046668b4e14e4f646668039b4bec1b18c7f0106d7719c29089128
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
@@ -65,6 +65,9 @@ test-suite convex-pentagonal-tilings-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      IntervalTests
+      MatrixTests
+      SimplexTests
       Paths_convex_pentagonal_tilings
   hs-source-dirs:
       test
