@@ -31,10 +31,18 @@ prop_least_containing_interval_contains i j =
   let ij = leastContainingInterval i j
   in all (isElementOf ij) [begin i, end i, begin j, end j]
 
+prop_least_containing_interval_same_intervals_unchanged :: Interval Rational -> Bool
+prop_least_containing_interval_same_intervals_unchanged i =
+  leastContainingInterval i i == i
+
 prop_extend_with_contains :: Interval Rational -> Rational -> Bool
 prop_extend_with_contains i x =
   let i' = extendWith i x
   in all (isElementOf i') [begin i, end i, x]
+
+prop_extend_with_element_unchanged :: Interval Rational -> Bool
+prop_extend_with_element_unchanged i =
+  all (==i) [extendWith i x | x <- [begin i, end i, midpoint i]]
 
 prop_width_non_negative :: Interval Rational -> Bool
 prop_width_non_negative i = width i >= 0
@@ -49,6 +57,8 @@ intervalTests = testGroup "interval" [
     testProperty "end is an element of interval" prop_end_is_elem_of,
     testProperty "fromElement contains element" prop_from_elem_is_elem_of,
     testProperty "leastContainingInterval contains end points of intervals" prop_least_containing_interval_contains,
+    testProperty "leastContainingInterval unchanged on same intervals" prop_least_containing_interval_same_intervals_unchanged,
+    testProperty "extendWith element in interval has no effect" prop_extend_with_element_unchanged,
     testProperty "extendWith contains point and end points of interval" prop_extend_with_contains,
     testProperty "width is non-negative" prop_width_non_negative,
     testProperty "midpoint is element of interval" prop_midpoint_contained
