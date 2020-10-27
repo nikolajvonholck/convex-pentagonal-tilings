@@ -1,4 +1,4 @@
-module AlgebraicNumber (AlgebraicNumber) where
+module AlgebraicNumber where
 
 import Polynomial (Polynomial, add, mul, neg, sub, evaluate, bound, euclideanDivision, degreeWithLeadingCoefficient, zeroPolynomial, constant)
 import Interval (Interval, interval, begin, end, midpoint)
@@ -6,9 +6,15 @@ import Interval (Interval, interval, begin, end, midpoint)
 import Data.List (find)
 import Data.Maybe (fromJust)
 
-data AlgebraicNumber = F Rational | An (Root Rational) (Polynomial Rational)
+data AlgebraicNumber = F Rational | An (Root Rational) (Polynomial Rational) deriving (Show)
 
-data Root a = Root (Polynomial a) (Interval a) deriving (Eq)
+data Root a = Root (Polynomial a) (Interval a) deriving (Show, Eq)
+
+root :: (Fractional a, Ord a) => Polynomial a -> Interval a -> Root a
+root f i =
+  if evaluate f (begin i) * evaluate f (end i) < 0
+    then Root f i
+    else error "Invalid root."
 
 bisections :: (Fractional a, Ord a) => Root a -> [Interval a]
 bisections (Root f i) = bisections' f i
@@ -24,11 +30,11 @@ bisections (Root f i) = bisections' f i
                 _ -> error "Assumptions for bisections violated."
       in i' : bisections' g i''
 
--- valueWithPrecision :: Root a -> a
--- valueWithPrecision r a = fromJust $ find (\i -> midpoint i <= a) (bisections r)
+algebraicNumber :: Root Rational -> Polynomial Rational -> AlgebraicNumber
+algebraicNumber (r@(Root f _)) g = An r (snd $ euclideanDivision g f)
 
 convertRational :: Root Rational -> Rational -> AlgebraicNumber
-convertRational root x = An root (constant x)
+convertRational r x = An r (constant x)
 
 instance Eq AlgebraicNumber where
   F x == F y = x == y
@@ -40,7 +46,7 @@ instance Eq AlgebraicNumber where
       else error "Incompatible algebraic numbers."
 
 instance Ord AlgebraicNumber where
-  x <= y = x == y || isPositive (y - x)
+  x `compare` y = if x == y then EQ else if isPositive (y - x) then LT else GT
     where
       isPositive :: AlgebraicNumber -> Bool
       isPositive (F x') = 0 < x'
@@ -84,15 +90,15 @@ instance Fractional AlgebraicNumber where
   recip (F x) = F (recip x)
   recip (An (r@(Root f _)) x) =
     case degreeWithLeadingCoefficient x of
-      Nothing -> error "Division by algebraic numbers zero."
-      Just (0, c) -> An r (constant $ recip c) -- TODO: needed?
+      Nothing -> error "Division by algebraic number zero."
+      Just (0, c) -> An r (constant $ recip c) -- TODO: Is this only needed for cursive call? Check math!
       Just _ -> bezout (f, x) (constant 0, constant 1)
     where
       bezout :: (Polynomial Rational, Polynomial Rational) -> (Polynomial Rational, Polynomial Rational) -> AlgebraicNumber
-      bezout (w0, w1) (u0, u1) =
-        if w1 == zeroPolynomial then An r u0
+      bezout (r0, r1) (t0, t1) =
+        if r1 == zeroPolynomial then (An r t0) * (recip $ An r r0)
         else
-          let (q, _) = euclideanDivision w0 w1
-              w2 = w0 `sub` (q `mul` w1)
-              u2 = u0 `sub` (q `mul` u1)
-          in bezout (w1, w2) (u1, u2)
+          let q = fst $ euclideanDivision r0 r1
+              r2 = r0 `sub` (q `mul` r1)
+              t2 = t0 `sub` (q `mul` t1)
+          in bezout (r1, r2) (t1, t2)

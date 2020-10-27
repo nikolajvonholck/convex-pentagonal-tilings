@@ -1,4 +1,4 @@
-module Polynomial (Polynomial, polynomial, add, mul, neg, sub, evaluate, euclideanDivision, bound, degreeWithLeadingCoefficient, zeroPolynomial, constant, degree, derivative) where
+module Polynomial (Polynomial, polynomial, add, mul, neg, sub, evaluate, euclideanDivision, bound, degreeWithLeadingCoefficient, zeroPolynomial, constant, degree, derivative, fromList) where
 
 import Interval (Interval, interval, fromElement, begin, end, midpoint, width)
 import Utils (maxBy)

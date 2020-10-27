@@ -1,5 +1,6 @@
 module Main where
 
+import AlgebraicNumberTests (algebraicNumberTests)
 import IntervalTests (intervalTests)
 import MatrixTests (matrixTests)
 import PolynomialTests (polynomialTests)
@@ -12,6 +13,7 @@ main = defaultMain $ localOption (mkTimeout $ 20 * 1000000) tests
 
 tests :: TestTree
 tests = testGroup "tests" [
+    algebraicNumberTests,
     intervalTests,
     matrixTests,
     polynomialTests,
