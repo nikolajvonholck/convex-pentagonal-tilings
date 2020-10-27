@@ -1,4 +1,4 @@
-module Polynomial (Polynomial, polynomial, add, mul, neg, sub, evaluate, euclideanDivision, bound, degreeWithLeadingCoefficient, zeroPolynomial, constant) where
+module Polynomial (Polynomial, polynomial, add, mul, neg, sub, evaluate, euclideanDivision, bound, degreeWithLeadingCoefficient, zeroPolynomial, constant, degree, derivative) where
 
 import Interval (Interval, interval, fromElement, begin, end, midpoint, width)
 import Utils (maxBy)
@@ -17,10 +17,10 @@ degreeWithLeadingCoefficient (Poly f) = case toList f of
   [] -> Nothing
   ics -> Just $ maxBy fst ics
 
--- degree :: (Num a) => Polynomial a -> Integer
--- degree f = case degreeWithLeadingCoefficient f of
---     Nothing -> -1
---     Just (i, _) -> i
+degree :: (Num a) => Polynomial a -> Integer
+degree f = case degreeWithLeadingCoefficient f of
+    Nothing -> -1
+    Just (i, _) -> i
 
 -- Simplifies polynomial by removing zero-coeffcients.
 polynomial :: (Num a, Eq a) => Map Integer a -> Polynomial a
@@ -39,20 +39,18 @@ derivative (Poly f) =
 evaluate :: (Fractional a, Eq a) => Polynomial a -> a -> a
 evaluate (Poly f) a = sum [c * (a^^i) | (i, c) <- toList f]
 
--- TODO: slet // Bounding interval of f(a + x) for |x| <= l. Assumes l >= 0.
--- TODO: Check math.
--- Bounding interval of f(z) for z in interval.
+-- Bounding interval for image of f over the given interval.
 bound :: (Fractional a, Ord a) => Polynomial a -> Interval a -> Interval a
 bound f i =
   case degreeWithLeadingCoefficient f of
     Nothing -> fromElement 0
     Just (0, c) -> fromElement c
     Just _ ->
-      let (x, w) = (midpoint i, width i / 2)
-          bound' = bound (derivative f) i
-          d = max (abs $ begin bound') (abs $ end bound')
+      let (x, dx) = (midpoint i, width i / 2)
+          slopeBound = bound (derivative f) i
+          maxSlope = max (abs $ begin slopeBound) (abs $ end slopeBound)
           fx = evaluate f x
-      in interval (fx - w * d, fx + w * d)
+      in interval (fx - dx * maxSlope, fx + dx * maxSlope)
 
 add :: (Num a, Eq a) => Polynomial a -> Polynomial a -> Polynomial a
 add (Poly f) (Poly g) = polynomial $ unionWith (+) f g
@@ -63,17 +61,16 @@ neg (Poly f) = Poly (Map.map negate f)
 sub :: (Num a, Eq a) => Polynomial a -> Polynomial a -> Polynomial a
 sub f g = add f (neg g)
 
-mulMonomial :: (Num a, Eq a) => Polynomial a -> (Integer, a) -> Polynomial a
-mulMonomial (Poly f) (j, q) =
-  fromList [(i + j, q * p) | (i, p) <- toList f]
-
 mul :: (Num a, Eq a) => Polynomial a -> Polynomial a -> Polynomial a
 mul (Poly f) g =
   let terms = map (mulMonomial g) (toList f)
   in foldl add zeroPolynomial terms
+  where
+    mulMonomial :: (Num a, Eq a) => Polynomial a -> (Integer, a) -> Polynomial a
+    mulMonomial (Poly h) (j, q) =
+      fromList [(i + j, q * p) | (i, p) <- toList h]
 
--- TODO: State assumptions.
--- TODO: Check math.
+-- Performs Euclidean division. The polynomial g should be non-zero.
 euclideanDivision :: (Fractional a, Eq a) => Polynomial a -> Polynomial a -> (Polynomial a, Polynomial a)
 euclideanDivision f g =
   case degreeWithLeadingCoefficient g of
@@ -83,7 +80,7 @@ euclideanDivision f g =
       Just (i, b) ->
         if i < j then (zeroPolynomial, f)
           else
-            let monomial = fromList [(i - j, b / a)]
-                f' = f `sub` (monomial `mul` g)
+            let s = fromList [(i - j, b / a)]
+                f' = f `sub` (s `mul` g)
                 (q, r) = euclideanDivision f' g
-            in (q `add` monomial, r)
+            in (q `add` s, r)
