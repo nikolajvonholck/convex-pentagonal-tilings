@@ -46,8 +46,8 @@ prop_neg_one_negates_with_mul f = mul (constant (-1)) f == neg f
 prop_neg_twice_is_identity :: Polynomial Integer -> Bool
 prop_neg_twice_is_identity f = neg (neg f) == f
 
-prop_sub_then_add_is_identity :: Polynomial Integer -> Polynomial Integer -> Bool
-prop_sub_then_add_is_identity f g = add (sub f g) g == f
+prop_sub_additive_inverse :: Polynomial Integer -> Bool
+prop_sub_additive_inverse f = sub f f == zeroPolynomial
 
 prop_sub_flipping_args_negates :: Polynomial Integer -> Polynomial Integer -> Bool
 prop_sub_flipping_args_negates f g = sub f g == neg (sub g f)
@@ -85,13 +85,13 @@ polynomialTests = testGroup "polynomial" [
     testProperty "mul: commutative" prop_mul_commutative,
     testProperty "add, mul: distributivity" prop_add_mul_distributivity,
     testProperty "mul: zero is absorbing" prop_mul_zero_is_absorbing,
-    testProperty "neg: mul with (neg 1) negates" prop_neg_one_negates_with_mul,
-    testProperty "neg: twice is identity" prop_neg_twice_is_identity,
-    testProperty "sub: sub then add same is identity" prop_sub_then_add_is_identity,
+    testProperty "neg: (-1) * x == -x" prop_neg_one_negates_with_mul,
+    testProperty "neg: -(-x) == x" prop_neg_twice_is_identity,
+    testProperty "sub: additive inverse" prop_sub_additive_inverse,
     testProperty "sub: flipping args negates" prop_sub_flipping_args_negates,
     testProperty "degree: add does not increase degrees" prop_degree_add_does_not_increase_degree,
     testProperty "degree: degree of mul is sum of degrees" prop_degree_mul_adds_degrees,
     testProperty "derivative: decrements degree" prop_derivative_decrements_degree,
-    testProperty "bound: bounds evaluations at endpoints and midpoint" prop_bound_bounds_eval,
+    testProperty "bound: contains evaluations at endpoints and midpoint" prop_bound_bounds_eval,
     testProperty "euclideanDivision: f == g * q + r, deg r < deg g" prop_euclidean_division
   ]

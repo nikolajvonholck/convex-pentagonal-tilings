@@ -126,8 +126,8 @@ algebraicNumberTests = testGroup "algebraicNumber" [
     testProperty "additive neutral element" prop_add_neutral_elm,
     testProperty "addition is associative" prop_add_associative,
     testProperty "addition is commutative" prop_add_commutative,
-    testProperty "addititive inverse" prop_add_inverse,
-    testProperty "multiplication neutral element" prop_mul_neutral_elm,
+    testProperty "additive inverse" prop_add_inverse,
+    testProperty "multiplicative neutral element" prop_mul_neutral_elm,
     testProperty "multiplication is associative" prop_mul_associative,
     testProperty "multiplication is commutative" prop_mul_commutative,
     testProperty "distributivity" prop_add_mul_distributivity,
@@ -135,5 +135,5 @@ algebraicNumberTests = testGroup "algebraicNumber" [
     testProperty "negate: -1 * x == -x" prop_neg_one_negates_with_mul,
     testProperty "negate: -(-x) == x" prop_neg_twice_is_identity,
     testProperty "|x| * sign(x) == x" prop_abs_signum,
-    testProperty "x / x == 1" prop_mul_inverse
+    testProperty "x / x == 1 for x /= 0" prop_mul_inverse
   ]
