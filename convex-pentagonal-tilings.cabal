@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2c3e6acd166d7f3134ab67325976d619b2c875faf0baf16b99f866d8c6d622b7
+-- hash: e2a9ca1350b4639c1ed61395c38e42722dfa092467229e5ae19b60e1d16ef612
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       AffineSubspace
       AlgebraicNumber
+      ChebyshevPolynomial
       ConvexPolytope
       GoodSubsets
       Interval
@@ -66,6 +67,7 @@ test-suite convex-pentagonal-tilings-test
   main-is: Spec.hs
   other-modules:
       AlgebraicNumberTests
+      ChebyshevPolynomialTests
       IntervalTests
       MatrixTests
       PolynomialTests
