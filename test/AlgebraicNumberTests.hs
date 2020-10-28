@@ -132,7 +132,7 @@ algebraicNumberTests = testGroup "algebraicNumber" [
     testProperty "multiplication is commutative" prop_mul_commutative,
     testProperty "distributivity" prop_add_mul_distributivity,
     testProperty "multiplication: 0 * x == 0" prop_mul_zero_is_absorbing,
-    testProperty "negate: -1 * x == -x" prop_neg_one_negates_with_mul,
+    testProperty "negate: (-1) * x == -x" prop_neg_one_negates_with_mul,
     testProperty "negate: -(-x) == x" prop_neg_twice_is_identity,
     testProperty "|x| * sign(x) == x" prop_abs_signum,
     testProperty "x / x == 1 for x /= 0" prop_mul_inverse
