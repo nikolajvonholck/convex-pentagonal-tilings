@@ -1,6 +1,6 @@
 module AlgebraicNumber where
 
-import Polynomial (Polynomial, add, mul, neg, sub, evaluate, bound, euclideanDivision, degreeWithLeadingCoefficient, zeroPolynomial, constant)
+import Polynomial (Polynomial, evaluate, bound, euclideanDivision, degreeWithLeadingCoefficient, constant)
 import Interval (Interval, interval, begin, end, midpoint)
 
 import Data.List (find)
@@ -33,13 +33,13 @@ bisections (Root f i) = bisections' f i
 algebraicNumber :: Root Rational -> Polynomial Rational -> AlgebraicNumber
 algebraicNumber (r@(Root f _)) g = An r (snd $ euclideanDivision g f)
 
-convertRational :: Root Rational -> Rational -> AlgebraicNumber
-convertRational r x = An r (constant x)
+inclusion :: Root Rational -> Rational -> AlgebraicNumber
+inclusion r x = An r (constant x)
 
 instance Eq AlgebraicNumber where
   F x == F y = x == y
-  An r x == F y = An r x == convertRational r y
-  F x == An r y = convertRational r x == An r y
+  An r x == F y = An r x == inclusion r y
+  F x == An r y = inclusion r x == An r y
   An r1 x == An r2 y =
     if r1 == r2
       then x == y
@@ -57,23 +57,23 @@ instance Ord AlgebraicNumber where
 
 instance Num AlgebraicNumber where
   F x + F y = F (x + y)
-  An r x + F y = An r x + convertRational r y
-  F x + An r y = convertRational r x + An r y
+  An r x + F y = An r x + inclusion r y
+  F x + An r y = inclusion r x + An r y
   An r1 x + An r2 y =
     if r1 == r2
-      then An r1 (add x y)
+      then An r1 (x + y)
       else error "Incompatible algebraic numbers."
 
   F x * F y = F (x * y)
-  An r x * F y = An r x * convertRational r y
-  F x * An r y = convertRational r x * An r y
+  An r x * F y = An r x * inclusion r y
+  F x * An r y = inclusion r x * An r y
   An (r1@(Root f _)) x * An r2 y =
     if r1 == r2
-      then let (_, z) = euclideanDivision (mul x y) f in An r1 z
+      then An r1 (snd $ euclideanDivision (x * y) f)
       else error "Incompatible algebraic numbers."
 
   negate (F x) = F (negate x)
-  negate (An r x) = An r (neg x)
+  negate (An r x) = An r (negate x)
 
   abs x = if 0 <= x then x else negate x
 
@@ -96,9 +96,7 @@ instance Fractional AlgebraicNumber where
     where
       bezout :: (Polynomial Rational, Polynomial Rational) -> (Polynomial Rational, Polynomial Rational) -> AlgebraicNumber
       bezout (r0, r1) (t0, t1) =
-        if r1 == zeroPolynomial then (An r t0) * (recip $ An r r0)
+        if r1 == 0 then (An r t0) * (recip $ An r r0)
         else
           let q = fst $ euclideanDivision r0 r1
-              r2 = r0 `sub` (q `mul` r1)
-              t2 = t0 `sub` (q `mul` t1)
-          in bezout (r1, r2) (t1, t2)
+          in bezout (r1, r0 - q * r1) (t1, t0 - q * t1)
