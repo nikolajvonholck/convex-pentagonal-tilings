@@ -50,7 +50,7 @@ initialGoodnessCP = do
       constraint [0, 0, 0, 0, -1] 1, constraint [0, 0, 0, 0, 1] 1
     ] -- [-1, 1]^5
 
-inflate :: VectorTypeSet -> Maybe VectorTypeSet
+inflate :: VectorTypeSet -> Maybe (VectorTypeSet, ConvexPolytope Rational)
 inflate xs =
   do
     ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 3)
@@ -64,8 +64,10 @@ inflate xs =
     angleCP <- foldM projectOntoHyperplane cp [HP (asRational v) 2 | v <- elems xs]
     let points = elems $ extremePoints angleCP
     let point = (1 / genericLength points) |*| (foldl (|+|) (zero 5) points)
+    let compat = compatSet xs point
+    angleCP' <- foldM projectOntoHyperplane cp [HP (asRational v) 2 | v <- elems compat]
     guard $ all (\v -> 0 < v && v < 1) point
-    return $ compatSet xs point
+    return $ (compat, angleCP')
 
 recurse :: Map VectorTypeSet Bool
 recurse = recurse' empty initialAngleCP initialGoodnessCP Map.empty
