@@ -25,9 +25,9 @@ bisections (Root f i) = bisections' f i
       let (a, b, c) = (begin i', end i', midpoint i')
           (ga, gb, gc) = (evaluate g a, evaluate g b, evaluate g c)
           i'' = case ((ga * gb) `compare` 0, (ga * gc) `compare` 0) of
-                (LT, LT) -> interval (ga, gc)
-                (LT, GT) -> interval (gc, gb)
                 _ -> error "Assumptions for bisections violated."
+                (LT, LT) -> interval (a, c)
+                (LT, GT) -> interval (c, b)
       in i' : bisections' g i''
 
 algebraicNumber :: Root Rational -> Polynomial Rational -> AlgebraicNumber
