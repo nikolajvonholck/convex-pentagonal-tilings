@@ -1,9 +1,12 @@
-module TilingGraph (sides, interiorAngles, isVertexValid, canCompleteVertexWithZero, completeVertexWithZero, canCompleteVertexWithPi, completeVertexWithPi, mergeVertices, exhaustiveSearch) where
+module TilingGraph (exhaustiveSearch) where
 
 import Vector (Vector, (|+|), (|-|), (|*|))
 import GoodSubsets (VectorType, VectorTypeSet)
 import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
 import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
+import AlgebraicNumber (AlgebraicNumber, algebraicNumber)
+import ChebyshevPolynomial (commonDenominator, cosineFieldExtension, sinePoly, cosinePoly)
+import Data.List (genericTake)
 
 -- import qualified Data.Set as Set
 import Data.List (genericLength)
@@ -13,7 +16,7 @@ import qualified Data.Map.Strict as Map -- TODO: Consider type of map (strict?, 
 import Data.Map (Map, insert, delete, fromList)
 import Data.Maybe (fromJust, isJust)
 import Data.List (find)
-import Control.Monad (guard, when)
+import Control.Monad (guard, when, foldM)
 
 import Debug.Trace (traceShow)
 
@@ -26,8 +29,8 @@ data Side = EOne | ETwo | EThree | EFour | EFive deriving (Show, Eq)
 
 data Orientation = CounterClockwise | ClockWise
 
-asRational :: Vector Integer -> Vector Rational
-asRational = map fromInteger
+asAlgNum :: Vector Integer -> Vector AlgebraicNumber
+asAlgNum = map fromInteger
 
 orientations :: [Orientation]
 orientations = [CounterClockwise, ClockWise]
@@ -91,31 +94,18 @@ isVertexHalf :: [VertexInfo] -> Bool
 isVertexHalf = any ((Ext Pi==) . angle)
 -- TODO: Check for multiple PI-angles.
 
-canCompleteVertex :: VectorTypeSet -> [VertexInfo] -> Bool
-canCompleteVertex xs is =
-  canCompleteVertexWithZero xs is || canCompleteVertexWithPi xs is
-
-canCompleteVertexWithZero :: VectorTypeSet -> [VertexInfo] -> Bool
-canCompleteVertexWithZero xs is =
-  (not $ isVertexComplete is) && correctedVectorType is `member` xs
-
-canCompleteVertexWithPi :: VectorTypeSet -> [VertexInfo] -> Bool
-canCompleteVertexWithPi xs is =
-  (not $ isVertexComplete is) && (2 |*| vectorType is `member` xs)
-
--- Returns final vertex info list along with the adjust vertex info
--- that is used to determine the affected run.
-completeVertexWithZero :: [VertexInfo] -> ([VertexInfo], VertexInfo)
-completeVertexWithZero [] = error "Empty vertex info."
-completeVertexWithZero ((VertexInfo (Ext Unknown) v s):is) =
-  let i' = (VertexInfo (Ext Zero) v s) in (i':is, i')
-completeVertexWithZero _ = error "First angle of incomplete vertex should be unknown."
-
-completeVertexWithPi :: [VertexInfo] -> ([VertexInfo], VertexInfo)
-completeVertexWithPi [] = error "Empty vertex info."
-completeVertexWithPi ((VertexInfo (Ext Unknown) v s):is) =
-  let i' = (VertexInfo (Ext Pi) v s) in (i':is, i')
-completeVertexWithPi _ = error "First angle of incomplete vertex should be unknown."
+-- Returns final vertex info list along with the adjusted vertex info
+-- that can be used to determine the affected run.
+completeVertex :: VectorTypeSet -> [VertexInfo] -> Maybe ([VertexInfo], VertexInfo)
+completeVertex xs iss =
+  case iss of
+    ((VertexInfo (Ext Unknown) v s):is) -> do
+        a <- if correctedVectorType is `member` xs then Just Zero
+             else if 2 |*| vectorType is `member` xs then Just Pi
+             else Nothing
+        let i' = (VertexInfo (Ext a) v s)
+        return (i':is, i')
+    _ -> Nothing
 
 vertexInfoList :: TilingGraph -> Vertex -> [VertexInfo]
 vertexInfoList g v = case Map.lookup v g of
@@ -175,8 +165,6 @@ getLengths ((VertexInfo a _ s):is) =
 lengthType :: [Side] -> Vector Integer -- counts lengths.
 lengthType ss = [genericLength $ filter (s==) ss | s <- sides]
 
-
-
 isVertexValid :: VectorTypeSet -> [VertexInfo] -> Bool
 isVertexValid xs is =
   length (filter ((Ext Pi==) . angle) is) <= 1 &&
@@ -185,36 +173,34 @@ isVertexValid xs is =
       then cvt `member` xs
       else any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs
 
-vertexCompletions :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational)]
+vertexCompletions :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
 vertexCompletions xs g lp =
   if any (\is -> not $ isVertexValid xs is) g then []
-    else case minWhere (\(_, is) -> canCompleteVertex xs is) g of -- Find completable vertex.
+    else case Map.lookupMin $ Map.filter isJust $ Map.map (completeVertex xs) g of -- Find completable vertex.
       Nothing -> [(g, lp)] -- No more vertices can be completed at this time.
-      Just (v, is) ->  -- TODO: Make much more clean...
-        let (is', i) = if canCompleteVertexWithZero xs is then completeVertexWithZero is
-                  else if canCompleteVertexWithPi xs is then completeVertexWithPi is
-                  else error "Some completion should be possible."
-            g'' = insert v is' g -- Update vertex info for vertex v. TODO: Consider using Map.adjust.
+      Just (v, Just (is', i)) ->
+        let g'' = insert v is' g -- Update vertex info for vertex v. TODO: Consider using Map.adjust.
         in concat [vertexCompletions xs g' lp' | (g', lp') <- completeRun xs g'' lp (v, i)]
+      _ -> error "Impossible."
 
 -- (v, i) is the affected vertex and angle, so we should consider the induced run.
-completeRun :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> (Vertex, VertexInfo) -> [(TilingGraph, ConvexPolytope Rational)]
+completeRun :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> (Vertex, VertexInfo) -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
 completeRun xs g lp (v, i) =
   let (x, is, y) = getRun g v i
       checked = case map lengthType $ getLengths is of
-        [la, lb] -> let cs = asRational $ la |-| lb -- la < lb
+        [la, lb] -> let cs = asAlgNum $ la |-| lb -- la < lb
           in [(g, lp') | let lp'' = cutHalfSpace lp (constraint cs 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g, lp') | let lp'' = cutHalfSpace lp (constraint ((-1) |*| cs) 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g', lp') | let lp'' = projectOntoHyperplane lp (HP cs 0),
                             isJust lp'',
-                            let (Just lp''') = lp'',
-                            (g', lp') <- mergeVertices xs g lp''' x y Zero]
-        [la, lb, lc] -> let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
+                            let (Just lp') = lp'',
+                            let (g', _, _) = mergeTwoVertices g x y Zero]
+        [la, lb, lc] -> let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
           in [(g, lp') | let lp'' = cutHalfSpace lp (constraint cs 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g', lp') | let lp'' = projectOntoHyperplane lp (HP cs 0),
                             isJust lp'',
-                            let (Just lp''') = lp'',
-                            (g', lp') <- mergeVertices xs g lp''' x y Pi]
+                            let (Just lp') = lp'',
+                            let (g', _, _) = mergeTwoVertices g x y Pi]
         [_] -> [(g, lp)]
         _ -> error $ "Not zero, one or two Zero-angles." ++ show is
   in do
@@ -223,18 +209,23 @@ completeRun xs g lp (v, i) =
 
 -- v is first in run, v' is last (counterclockwise rotation/run around graph)
 -- vertex (min v v') is kept, while (max v v') is discarded.
-mergeVertices :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
-mergeVertices xs g lp v v' a =
+mergeTwoVertices :: TilingGraph -> Vertex -> Vertex -> ExteriorAngle -> (TilingGraph, Vertex, VertexInfo)
+mergeTwoVertices g v v' a =
   let (v'', vOut) = (min v v', max v v') -- Choose least vertex index.
       (iss, i') = case (vertexInfoList g v, vertexInfoList g v') of
         ((VertexInfo (Ext Unknown) w s):is, (VertexInfo (Ext Unknown) w' s'):is') ->
-          let i'' = VertexInfo (Ext a) w s -- TODO: Can simplify lines around this point.
+          let i'' = VertexInfo (Ext a) w s
           in (((VertexInfo (Ext Unknown) w' s'):is') ++ (i'':is), i'')
         _ -> error "Merging vertices must be incomplete."
       g' = insert v'' iss $ delete vOut g
-      -- TODO: Assert that i' does not mention v or v'. (it should not be 'outdated')
+      -- TODO: Consider assert that i' does not mention v or v'. (it should not be 'outdated')
       g'' = Map.map (map (\(VertexInfo a' w s) -> VertexInfo a' (if w == vOut then v'' else w) s)) g'
-  in do
+  in (g'', v'', i')
+
+mergeVertices :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+mergeVertices xs g lp v v' a =
+  do
+    let (g'', v'', i') = mergeTwoVertices g v v' a
     let info = vertexInfoList g'' v''
     when (i' `notElem` info) (error "i' was changed during merge.")
     guard $ isVertexValid xs info -- Abandon early if merged vertex can never be completed.
@@ -246,43 +237,46 @@ mergeVertices xs g lp v v' a =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exteriror (pi/empty) angles.
-backtrack :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational)]
+backtrack :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
 backtrack xs g lp =
   -- Conclusion: We will have to add another tile.
   do
     let maxVertexId = fst $ Map.findMax g -- initial 5.
-    let leastIncompleteVertexId = fst $ fromJust $ minWhere (\(_, is) -> not $ isVertexComplete is) (traceShow g g) -- initial 1.
+    let leastIncompleteVertexId = fst $ fromJust $ minWhere (\(_, is) -> not $ isVertexComplete is) g -- initial 1.
     orientation <- orientations -- Pick direction of new pentagon.
-    let anotherTile = pentagonGraph (traceShow maxVertexId maxVertexId) orientation
+    let anotherTile = pentagonGraph maxVertexId orientation
     let disconnectedGraph = Map.unionWith (\_ _ -> error "Key clash!") g anotherTile
     corner <- interiorAngles
     let cornerVertexId = fst $ fromJust $ minWhere (\(_, is) -> any (\i -> angle i == Int corner) is) anotherTile
     (g', lp') <- mergeVertices xs disconnectedGraph lp cornerVertexId leastIncompleteVertexId Zero -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
     -- all possible completions will be handled inside 'mergeVertices'.
-
     -- TODO: Consider guard isConstructible g' lp'
     backtrack xs g' lp'
 
-exhaustiveSearch :: VectorTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational)]
+exhaustiveSearch :: VectorTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
 exhaustiveSearch xs angleCP =
   let points = extremePoints angleCP
   in case elems points of
-    [_] ->
-      let -- (ps, q) = commonDenominator x
-          -- r = cosineFieldExtension q
-          -- sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
-          -- cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
-          ass = fromJust $ intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 1)
-          cp = fromJust $ boundedConvexPolytope Strict ass $ Set.fromList [
-              constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
-              constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
-              constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,
-              constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
-              constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
-            ] -- (0, 1)^5
-          -- sideCP <- foldM projectOntoHyperplane cp [sineConstraint, cosineConstraint]
+    [x] ->
+      let s = angleSum x
+          (ps, q) = commonDenominator s
+          r = cosineFieldExtension q
+          sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
+          cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
           g = (pentagonGraph 0 CounterClockwise)
-      in backtrack (traceShow xs xs) g cp
+          lp = do
+            ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1)]
+            cp <- boundedConvexPolytope Strict ass $ Set.fromList [
+                constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
+                constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
+                constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,
+                constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
+                constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
+              ] -- (0, 1)^5
+            foldM projectOntoHyperplane cp [sineConstraint, cosineConstraint]
+      in case traceShow lp lp of
+        Nothing -> []
+        Just lp' -> backtrack (traceShow xs xs) g lp'
     _ -> []
 
 -- TODO: Consider defining the two pentagons (in each direction) and using a map to offset vertex ids.
@@ -300,6 +294,9 @@ pentagonGraph vOffset orientation =
             VertexInfo (toAngle n) (vOffset + after n) (toSide n)
           ]
   in fromList [(vOffset + i, makeInfo i) | i <- [1..5]]
+
+angleSum :: Vector Rational -> Vector Rational
+angleSum as = [fromInteger i - 1 - (sum $ genericTake (i - 1) as) | i <- [1..5]]
 
 -- Returns (k, v) for minimal key satisfying p.
 minWhere :: ((k, v) -> Bool) -> Map k v -> Maybe (k, v)
