@@ -1,7 +1,7 @@
 module AlgebraicNumber where
 
 import Polynomial (Polynomial, evaluate, bound, euclideanDivision, degreeWithLeadingCoefficient, constant)
-import Interval (Interval, interval, begin, end, midpoint)
+import Interval (Interval, interval, begin, end, midpoint, width)
 
 import Data.List (find)
 import Data.Maybe (fromJust)
@@ -100,3 +100,9 @@ instance Fractional AlgebraicNumber where
         else
           let q = fst $ euclideanDivision r0 r1
           in bezout (r1, r0 - q * r1) (t1, t0 - q * t1)
+
+approximate :: Rational -> AlgebraicNumber -> Rational
+approximate _ (F x) = x
+approximate precision (An r x) =
+  let bounds = map (bound x) (bisections r)
+  in midpoint $ fromJust $ find (\i -> width i < precision) bounds

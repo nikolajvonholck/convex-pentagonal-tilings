@@ -1,12 +1,13 @@
-module TilingGraph (exhaustiveSearch) where
+module TilingGraph (TilingGraph, exhaustiveSearch, planarize, InteriorAngle(..), ExteriorAngle(..), Angle(..), Side(..), VertexWithLocation(..), VertexInfo(..)) where
 
-import Vector (Vector, (|+|), (|-|), (|*|))
+import Vector (Vector, zero, (|+|), (|-|), (|*|))
 import GoodSubsets (VectorType, VectorTypeSet)
 import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
 import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
-import AlgebraicNumber (AlgebraicNumber, algebraicNumber)
+import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
 import ChebyshevPolynomial (commonDenominator, cosineFieldExtension, sinePoly, cosinePoly)
-import Data.List (genericTake)
+import Data.List (genericTake, (\\))
+import Utils ((!), zipPedantic)
 
 -- import qualified Data.Set as Set
 import Data.List (genericLength)
@@ -115,13 +116,6 @@ vertexInfoList g v = case Map.lookup v g of
 wrappedVertexInfoList :: TilingGraph -> Vertex -> [VertexInfo]
 wrappedVertexInfoList g v = let is = vertexInfoList g v in is ++ [head is]
 
--- before is measured wrt. counterclockwise rotation around v.
-vertexInfoBefore :: TilingGraph -> Vertex -> VertexInfo -> VertexInfo
-vertexInfoBefore g v i = helper $ wrappedVertexInfoList g v
-  where
-    helper (x:y:zs) = if y == i then x else helper (y:zs)
-    helper _ = error "Could not find vertex info before."
-
 -- after is measured wrt. counterclockwise rotation around v.
 vertexInfoAfter :: TilingGraph -> Vertex -> VertexInfo -> VertexInfo
 vertexInfoAfter g v i = helper $ wrappedVertexInfoList g v
@@ -129,41 +123,116 @@ vertexInfoAfter g v i = helper $ wrappedVertexInfoList g v
     helper (x:y:zs) = if x == i then y else helper (y:zs)
     helper _ = error "Could not find vertex info before."
 
-runClockwise :: TilingGraph -> Vertex -> VertexInfo -> (Vertex, [VertexInfo])
-runClockwise g v i =
-  let v' = vertex $ vertexInfoBefore g v i -- next vertex in clockwise run.
-      i' = fromJust $ find (\j -> vertex j == v) $ vertexInfoList g v' -- Edge from v' to v.
-  in if angle i' == Ext Unknown -- End of run.
-    then (v', [i']) -- (begin vertex, first info)
-    else let (w, is) = runClockwise g v' i' in (w, i':is)
+-- Runs counterclockwise in the sense that:
+--  - Outermost vertex is clockwise end.
+--  - Innermost vertex is counterclockwise end.
+data Run = R Vertex ExteriorAngle (Maybe Edge) deriving (Show)
+data Edge = Edge Side Run deriving (Show)
 
-runCounterClockwise :: TilingGraph -> Vertex -> VertexInfo -> (Vertex, [VertexInfo])
-runCounterClockwise g v i =
-  let v' = vertex i -- next vertex in counterclockwise run.
-      i'' = fromJust $ find (\j -> vertex j == v) $ vertexInfoList g v' -- Edge from v' to v.
-      i' = vertexInfoAfter g v' i''
-  in if angle i' == Ext Unknown -- End of run.
-    then (v', []) -- (begin vertex, first info)
-    else let (w, is) = runCounterClockwise g v' i' in (w, i':is)
+-- (counterclockwise beginning, clockwise end)
+runEnds :: Run -> (Vertex, Vertex)
+runEnds (R v _ e) = case e of
+  Nothing -> (error "Impossible", v)
+  Just (Edge _ r) -> (v, snd $ runEnds r)
 
-getRun :: TilingGraph -> Vertex -> VertexInfo -> (Vertex, [VertexInfo], Vertex)
-getRun g v i =
-  let (x, is') = runClockwise g v i
-      (y, is'') = runCounterClockwise g v i
-  in (x, (reverse is') ++ [i] ++ is'', y) -- x --> runs ccw to --> y.
+runBends :: Run -> [Vertex]
+runBends (R v a e) = case e of
+  Nothing -> []
+  Just (Edge _ r) -> if a == Zero then v : runBends r else runBends r
 
-getLengths :: [VertexInfo] -> [[Side]]
-getLengths [] = [[]]
-getLengths ((VertexInfo a _ s):is) =
-  case getLengths is of
-    (ss:sss) -> case a of
-      Ext Zero -> ([]:(s:ss):sss) -- Finish length and initiate next length.
-      Ext _ -> (s:ss):sss -- Append to current length.
-      Int _ -> error "Should only get lengths for external infos." -- TODO: Improve.
-    _ -> error "getLengths Impossible." -- TODO: Improve error.
+runSides :: Run -> [[Side]]
+runSides (R _ a e) = case e of
+  Nothing -> [[]]
+  Just (Edge s r) ->
+    case runSides r of
+      [] -> error "Impossible."
+      (p:ps) ->
+        case a of
+          Zero -> []:(s:p):ps -- Add s finilizing run.
+          _ -> (s:p):ps -- Add s to existing run.
 
-lengthType :: [Side] -> Vector Integer -- counts lengths.
+exteriorRuns :: TilingGraph -> [Run]
+exteriorRuns g =
+  let (v, is) = fromJust $ minWhere (not . isVertexComplete . snd) g
+      (VertexInfo _ v' s) = head is
+      tour = R v Unknown (Just (Edge s (exteriorTour v v v')))
+  in partitionTour tour
+  where
+    -- Returns info about v' and its next side.
+    exteriorTour :: Vertex -> Vertex -> Vertex -> Run
+    exteriorTour vStart w w' = --(VertexInfo a'' w' _) =
+      let i' = fromJust $ find ((w==) . vertex) $ vertexInfoList g w' -- Edge from w' to w.
+          (VertexInfo a' w'' s') = vertexInfoAfter g w' i'
+      in case a' of
+        Int _ -> error "Exterior has interior angle!"
+        Ext ea' ->
+          if vStart == w' && ea' == Unknown
+          then R w' ea' Nothing
+          else R w' ea' $ Just (Edge s' (exteriorTour vStart w' w''))
+
+    partitionTour :: Run -> [Run]
+    partitionTour (R v Unknown e) = case e of
+      Nothing -> []
+      Just (Edge s r) -> case r of
+        R _ Unknown _ -> partitionTour r
+        _ ->
+          let (run, r') = collectRun r -- Collect until hitting unknown.
+          in (R v Unknown (Just (Edge s run))) : partitionTour r'
+    partitionTour _ = error "Exterior run begun unexpectedly."
+
+    collectRun :: Run -> (Run, Run)
+    collectRun (R v Unknown e) = (R v Unknown Nothing, R v Unknown e)
+    collectRun (R v a e) =
+      case e of
+        Nothing -> error "Exterior run ended unexpectedly."
+        Just (Edge s r) ->
+          let (run, r') = collectRun r
+          in (R v a (Just (Edge s run)), r')
+
+isRunValid :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> Run -> Bool
+isRunValid xs g lp r =
+  let (x, y) = runEnds r
+  in case map lengthType $ runSides r of
+    [la, lb] ->
+      let cs = asAlgNum $ la |-| lb -- la < lb
+      in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
+        (Just _, Nothing, Nothing) -> isVertexValidHalfVertex xs $ vertexInfoList g x
+        (Nothing, Just _, Nothing) -> error "Impossible: Vertices should already have been merged."
+        (Nothing, Nothing, Just _) -> isVertexValidHalfVertex xs $ vertexInfoList g y
+        _ -> error "Impossible: Run has not been decided."
+    [la, lb, lc] ->
+      let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
+      in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
+        (Just _, Nothing, Nothing) -> isVertexValidHalfVertex xs (vertexInfoList g x) && isVertexValidHalfVertex xs (vertexInfoList g y)
+        (Nothing, Just _, Nothing) -> error "Impossible: Vertices should already have been merged."
+        (Nothing, Nothing, Just _) -> error "Impossible: Violation of triangle inequality."
+        _ -> error "Impossible: Run has not been decided."
+    [_] -> True
+    _ -> error "Impossible: Malformed run."
+
+getRun :: TilingGraph -> Vertex -> VertexInfo -> Run
+getRun g v (VertexInfo (Ext a) v' s) =
+  let runs = exteriorRuns g
+  in fromJust $ find runHasEdge runs
+  where
+    runHasEdge :: Run -> Bool
+    runHasEdge (R _ _ Nothing) = False
+    runHasEdge (R w a' (Just (Edge s' r'))) =
+      let (R w' _ _) = r'
+      in (v, v', a, s) == (w, w', a', s') || runHasEdge r'
+getRun _ _ (VertexInfo (Int _) _ _) = error "Can not find run with interior angle."
+
+-- Counts the number of each length along the run.
+lengthType :: [Side] -> Vector Integer
 lengthType ss = [genericLength $ filter (s==) ss | s <- sides]
+
+isVertexValidHalfVertex :: VectorTypeSet -> [VertexInfo] -> Bool
+isVertexValidHalfVertex xs is =
+  let numPIs = length (filter ((Ext Pi==) . angle) is)
+      cvt = 2 |*| vectorType is
+  in if isVertexComplete is
+    then numPIs == 1 && cvt `member` xs
+    else numPIs == 0 && (any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs)
 
 isVertexValid :: VectorTypeSet -> [VertexInfo] -> Bool
 isVertexValid xs is =
@@ -186,23 +255,26 @@ vertexCompletions xs g lp =
 -- (v, i) is the affected vertex and angle, so we should consider the induced run.
 completeRun :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> (Vertex, VertexInfo) -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
 completeRun xs g lp (v, i) =
-  let (x, is, y) = getRun g v i
-      checked = case map lengthType $ getLengths is of
+  let r = getRun g v i
+      (x, y) = runEnds r
+      checked = case map lengthType $ runSides r of
         [la, lb] -> let cs = asAlgNum $ la |-| lb -- la < lb
           in [(g, lp') | let lp'' = cutHalfSpace lp (constraint cs 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g, lp') | let lp'' = cutHalfSpace lp (constraint ((-1) |*| cs) 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g', lp') | let lp'' = projectOntoHyperplane lp (HP cs 0),
                             isJust lp'',
                             let (Just lp') = lp'',
-                            let (g', _, _) = mergeTwoVertices g x y Zero]
+                            let (g', v', _) = mergeTwoVertices g x y Zero,
+                            isVertexValid xs $ vertexInfoList g' v']
         [la, lb, lc] -> let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
           in [(g, lp') | let lp'' = cutHalfSpace lp (constraint cs 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g', lp') | let lp'' = projectOntoHyperplane lp (HP cs 0),
                             isJust lp'',
                             let (Just lp') = lp'',
-                            let (g', _, _) = mergeTwoVertices g x y Pi]
+                            let (g', v', _) = mergeTwoVertices g x y Pi,
+                            isVertexValid xs $ vertexInfoList g' v']
         [_] -> [(g, lp)]
-        _ -> error $ "Not zero, one or two Zero-angles." ++ show is
+        _ -> []
   in do
     (g', lp') <- checked
     vertexCompletions xs g' lp'
@@ -229,6 +301,7 @@ mergeVertices xs g lp v v' a =
     let info = vertexInfoList g'' v''
     when (i' `notElem` info) (error "i' was changed during merge.")
     guard $ isVertexValid xs info -- Abandon early if merged vertex can never be completed.
+    -- TODO: Maybe check half vertices??
     completeRun xs g'' lp (v'', i') -- Note if v'' can be completed, it will happen inside of here.
 
 -- Assumes all possible completions performed.
@@ -243,41 +316,52 @@ backtrack xs g lp =
   do
     let maxVertexId = fst $ Map.findMax g -- initial 5.
     let leastIncompleteVertexId = fst $ fromJust $ minWhere (\(_, is) -> not $ isVertexComplete is) g -- initial 1.
+    let nextIncVerCandidates = [v |
+          run <- exteriorRuns g,
+          let bends = runBends run,
+          length bends == 2,
+          all (<= leastIncompleteVertexId) bends,
+          let (x, y) = runEnds run,
+          v <- [x, y],
+          not (isVertexComplete (vertexInfoList g v))] ++ [leastIncompleteVertexId]
+    let nextIncVer = traceShow ("candidates", nextIncVerCandidates) (head nextIncVerCandidates)
     orientation <- orientations -- Pick direction of new pentagon.
     let anotherTile = pentagonGraph maxVertexId orientation
     let disconnectedGraph = Map.unionWith (\_ _ -> error "Key clash!") g anotherTile
     corner <- interiorAngles
     let cornerVertexId = fst $ fromJust $ minWhere (\(_, is) -> any (\i -> angle i == Int corner) is) anotherTile
-    (g', lp') <- mergeVertices xs disconnectedGraph lp cornerVertexId leastIncompleteVertexId Zero -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
+    (g', lp') <- mergeVertices xs disconnectedGraph lp cornerVertexId nextIncVer Zero -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
+    guard $ all (isRunValid xs g' lp') (exteriorRuns g')
     -- all possible completions will be handled inside 'mergeVertices'.
     -- TODO: Consider guard isConstructible g' lp'
-    backtrack xs g' lp'
+    traceBacktrack xs (traceShow ("choice:", leastIncompleteVertexId, nextIncVer) g') lp'
 
-exhaustiveSearch :: VectorTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
-exhaustiveSearch xs angleCP =
-  let points = extremePoints angleCP
-  in case elems points of
-    [x] ->
-      let s = angleSum x
-          (ps, q) = commonDenominator s
-          r = cosineFieldExtension q
-          sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
-          cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
-          g = (pentagonGraph 0 CounterClockwise)
-          lp = do
-            ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1)]
-            cp <- boundedConvexPolytope Strict ass $ Set.fromList [
-                constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
-                constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
-                constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,
-                constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
-                constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
-              ] -- (0, 1)^5
-            foldM projectOntoHyperplane cp [sineConstraint, cosineConstraint]
-      in case traceShow lp lp of
-        Nothing -> []
-        Just lp' -> backtrack (traceShow xs xs) g lp'
-    _ -> []
+traceBacktrack :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+traceBacktrack xs g lp =
+  (g, lp) : backtrack xs g lp
+
+exhaustiveSearch :: VectorTypeSet -> Vector Rational -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+exhaustiveSearch xs alpha =
+  let s = angleSum (traceShow alpha alpha)
+      (ps, q) = commonDenominator s
+      r = cosineFieldExtension q
+      sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
+      cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
+      g = (pentagonGraph 0 CounterClockwise)
+      lp = do
+        ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1)]
+        cp <- boundedConvexPolytope Strict ass $ Set.fromList [
+            constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
+            constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
+            constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,
+            constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
+            constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
+          ] -- (0, 1)^5
+        foldM projectOntoHyperplane cp [sineConstraint, cosineConstraint]
+  in case traceShow (xs, alpha, s) lp of
+    Nothing -> []
+    Just lp' -> (g, lp') : backtrack xs g lp'
+
 
 -- TODO: Consider defining the two pentagons (in each direction) and using a map to offset vertex ids.
 pentagonGraph :: Vertex -> Orientation -> TilingGraph
@@ -295,12 +379,71 @@ pentagonGraph vOffset orientation =
           ]
   in fromList [(vOffset + i, makeInfo i) | i <- [1..5]]
 
-angleSum :: Vector Rational -> Vector Rational
-angleSum as = [fromInteger i - 1 - (sum $ genericTake (i - 1) as) | i <- [1..5]]
+angleSum :: Vector Rational -> Vector Rational -- TODO: Check tail-part
+angleSum as = [fromInteger i - 1 - (sum $ genericTake (i - 1) (tail as)) | i <- [1..5]]
 
 -- Returns (k, v) for minimal key satisfying p.
 minWhere :: ((k, v) -> Bool) -> Map k v -> Maybe (k, v)
 minWhere p m = find p (Map.toAscList m)
 
--- maxWhere :: ((k, v) -> Bool) -> Map k v -> Maybe (k, v)
--- maxWhere p m = find p (Map.toDescList m)
+-- The code below is only related to the visualization of the tiling graph.
+data VertexWithLocation = VWL Double Double [VertexInfo] deriving (Show, Eq)
+
+planarize :: Vector Rational -> TilingGraph -> ConvexPolytope AlgebraicNumber -> Map Vertex VertexWithLocation
+planarize alpha g lp =
+  helper $ Map.fromList [(1, VWL 0 0 (vertexInfoList g 1)), (2, VWL (lengthNum lengths EOne) 0 (vertexInfoList g 2))]
+  where
+    approxAlpha = map fromRational alpha
+    lengthsExtr = elems $ extremePoints lp
+    lengths = map (fromRational . (approximate 0.001)) $ (1 / (fromInteger $ genericLength lengthsExtr)) |*| (foldl (|+|) (zero 5) lengthsExtr)
+    helper :: Map Vertex VertexWithLocation -> Map Vertex VertexWithLocation
+    helper gl =
+      let vWithL = Map.keys gl
+      in case Map.keys g \\ vWithL of
+        [] -> gl
+        vWithoutL ->
+          let v = fromJust $ find (\w -> any (`elem` vWithL) [vertex i | i <- vertexInfoList g w]) vWithoutL
+              is = vertexInfoList g v
+          in helper $ Map.insert v (determineLocation approxAlpha lengths gl v is) gl
+
+determineLocation :: Vector Double -> Vector Double -> Map Vertex VertexWithLocation -> Vertex -> [VertexInfo] -> VertexWithLocation
+determineLocation as ls gl v is =
+  let VertexInfo _ v' s' = fromJust $ findNeighbourWithLocation gl is
+      (VWL xv' yv' isv') = fromJust $ Map.lookup v' gl
+      VertexInfo _ v'' _ = fromJust $ findNeighbourWithLocation gl isv'
+      (VWL xv'' yv'' _) = fromJust $ Map.lookup v'' gl
+      anglev'v'' = (atan2 (yv'' - yv') (xv'' - xv')) / pi
+      calcAnglesv' = calcAngles as isv'
+      (calcAnglev'', _) = fromJust $ find (\(_, i) -> vertex i == v'') (zipPedantic calcAnglesv' isv')
+      (calcAnglev, _) = fromJust $ find (\(_, i) -> vertex i == v) (zipPedantic calcAnglesv' isv')
+      anglev = anglev'v'' + calcAnglev - calcAnglev''
+      l = lengthNum ls s'
+  in VWL (xv' + l * cos (anglev * pi)) (yv' + l * sin (anglev * pi)) is
+
+findNeighbourWithLocation :: Map Vertex VertexWithLocation -> [VertexInfo] -> Maybe VertexInfo
+findNeighbourWithLocation gl is =
+  let vWithL = Map.keys gl
+  in find (\i -> (vertex i) `elem` vWithL) is
+
+angleNum :: Vector Double -> Angle -> Double
+angleNum alpha (Int a) = case a of
+    AOne -> alpha ! 1
+    ATwo -> alpha ! 2
+    AThree -> alpha ! 3
+    AFour -> alpha ! 4
+    AFive -> alpha ! 5
+angleNum _ (Ext a) = case a of
+    Unknown -> 0
+    Zero -> 0
+    Pi -> 1
+
+lengthNum :: Vector Double -> Side -> Double
+lengthNum lengths s = case s of
+    EOne -> lengths ! 1
+    ETwo -> lengths ! 2
+    EThree -> lengths ! 3
+    EFour -> lengths ! 4
+    EFive -> lengths ! 5
+
+calcAngles :: Vector Double -> [VertexInfo] -> [Double]
+calcAngles alpha is = tail $ scanl (\acc i -> acc + angleNum alpha (angle i)) 0 is
