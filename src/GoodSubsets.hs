@@ -20,7 +20,7 @@ type VectorTypeSet = Set VectorType
 initialAngleCP :: Maybe (ConvexPolytope Rational)
 initialAngleCP = do
   ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 3)
-  boundedConvexPolytope NonStrict ass $ fromList [
+  boundedConvexPolytope NonStrict ass [
       constraint [1, 0, 0, 0, 0] 1,
       constraint [-1, 1, 0, 0, 0] 0,
       constraint [0, -1, 1, 0, 0] 0,
@@ -42,7 +42,7 @@ minmax cp =
 initialGoodnessCP :: Maybe (ConvexPolytope Rational)
 initialGoodnessCP = do
   ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 0)
-  boundedConvexPolytope NonStrict ass $ fromList [
+  boundedConvexPolytope NonStrict ass [
       constraint [-1, 0, 0, 0, 0] 1, constraint [1, 0, 0, 0, 0] 1,
       constraint [0, -1, 0, 0, 0] 1, constraint [0, 1, 0, 0, 0] 1,
       constraint [0, 0, -1, 0, 0] 1, constraint [0, 0, 1, 0, 0] 1,
@@ -54,7 +54,7 @@ inflate :: VectorTypeSet -> Maybe (VectorTypeSet, ConvexPolytope Rational)
 inflate xs =
   do
     ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 3)
-    cp <- boundedConvexPolytope NonStrict ass $ fromList [
+    cp <- boundedConvexPolytope NonStrict ass [
         constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
         constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
         constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,

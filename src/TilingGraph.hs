@@ -12,7 +12,6 @@ import JSON
 
 -- import qualified Data.Set as Set
 import Data.List (genericLength)
-import qualified Data.Set as Set
 import Data.Set (member, elems)
 import qualified Data.Map.Strict as Map -- TODO: Consider type of map (strict?, hashmap?, intmap?)
 import Data.Map (Map, insert, delete, fromList)
@@ -356,7 +355,7 @@ exhaustiveSearch xs alpha =
       g = (pentagonGraph 0 CounterClockwise)
       lp = do
         ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1)]
-        boundedConvexPolytope Strict ass $ Set.fromList [
+        boundedConvexPolytope Strict ass [
             constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
             constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
             constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,

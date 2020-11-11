@@ -2,6 +2,7 @@
 
 module Main where
 
+import System.Environment
 import Network.Wai (responseLBS, pathInfo, Application)
 import Network.Wai.Handler.Warp (run)
 import Network.HTTP.Types (status200, status404)
@@ -10,10 +11,11 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Text as T
 import Text.Read (readMaybe)
 
-import GoodSubsets (inflate)
+import GoodSubsets (VectorTypeSet, recurse, inflate, permutations, rotationsAndReflections)
+import Data.Set (Set, empty, elems, singleton, (\\), size, toList, fromList, unions, member, union)
+import qualified Data.Set as Set
 import TilingGraph (TilingGraph, exhaustiveSearch, planarize)
 import Utils (enumerate)
-import Data.Set (fromList, elems)
 import Vector (Vector)
 import JSON
 import ConvexPolytope (ConvexPolytope, extremePoints)
@@ -23,6 +25,43 @@ import Data.List (genericIndex)
 
 main :: IO ()
 main = do
+  args <- getArgs
+  case args of
+    ["goodsubsets"] -> mainGoodSubsets
+    ["server"] -> mainServer
+    x -> putStrLn $ "Invalid arguments: " ++ show x
+
+mainGoodSubsets :: IO ()
+mainGoodSubsets = do
+  putStrLn "Will determine all non-empty maximal good sets..."
+  let maximalSets = recurse
+  let maximalGoodSets = Map.filter id maximalSets
+  let nonEmptyMaximalGoodSets = Map.keysSet maximalGoodSets \\ singleton empty
+  print $ size nonEmptyMaximalGoodSets -- 193 √
+  let allPermutations = unions $ Set.map (fromList . permutations) nonEmptyMaximalGoodSets
+  print $ size allPermutations -- 3495 √
+  let representatives = unique (toList allPermutations) empty
+  print $ length representatives -- 371 √
+  putStrLn "Will compare with Michael Rao's results..."
+  contents <- readFile "data/michael-rao-good-subsets.txt"
+  let raoGenerators = read contents :: [[[Integer]]]
+  let raoGoodSubsets = case sequence $ map (inflate . fromList) raoGenerators of
+        Nothing -> error "Failed to compute Michael Rao's maximal good subsets."
+        (Just goodSubsets) -> map fst goodSubsets
+  putStrLn "Have we found the same maximal good subsets?"
+  print $ (raoGoodSubsets `isSubsetOf` representatives) && (representatives `isSubsetOf` raoGoodSubsets)
+  where
+    isSubsetOf :: [VectorTypeSet] -> [VectorTypeSet] -> Bool
+    a `isSubsetOf` b = all (\vs -> any (`elem` b) $ rotationsAndReflections vs) a
+    unique :: [VectorTypeSet] -> Set VectorTypeSet -> [VectorTypeSet]
+    unique [] _ = []
+    unique (vs:vss) except =
+      if vs `member` except
+        then unique vss except
+        else vs : (unique vss $ union except $ fromList $ rotationsAndReflections vs)
+
+mainServer :: IO ()
+mainServer = do
   lists <- backtrackings
   startServer $ server $ makeResponder lists
 
