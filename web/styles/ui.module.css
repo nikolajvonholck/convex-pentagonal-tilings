@@ -24,14 +24,18 @@
 }
 
 .sidebar .section {
+  display: flex;
+  align-items: center;
   font-size: 14px;
   font-weight: bold;
   height: 42px;
   letter-spacing: 1.12px;
-  margin: 0;
-  padding-top: 7px;
-  padding-right: 7px;
+  margin: 7px 0;
   text-transform: uppercase;
+}
+
+.spinner {
+  margin: 0 10px;
 }
 
 .sidebar .buttonContainer {

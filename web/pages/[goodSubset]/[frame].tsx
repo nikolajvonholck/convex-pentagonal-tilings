@@ -13,7 +13,7 @@ const Home: NextPage = () => {
   const goodSubsetId = parseInt(goodSubset as string)
   const iteration = parseInt(frame as string)
 
-  const [result, , error] = useIteration(goodSubsetId, iteration)
+  const [result, isLoading, error] = useIteration(goodSubsetId, iteration)
   const graph = result?.graph
   const convexPolytope = result?.convexPolytope
 
@@ -30,7 +30,10 @@ const Home: NextPage = () => {
       </Head>
       <div className={styles.sidebar}>
         <div className={styles.section}>Good subset: {goodSubsetId}</div>
-        <div className={styles.section}>Iteration: {iteration}</div>
+        <div className={styles.section}>
+          <div>Iteration: {iteration}</div>
+          {isLoading && <img className={styles.spinner} src='/spinner.svg' />}
+        </div>
         <div className={styles.buttonContainer}>
           <button type='button' onClick={() => goToIteration(prevIteration)}>
             Previous
