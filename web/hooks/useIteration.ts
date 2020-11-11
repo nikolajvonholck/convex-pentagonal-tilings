@@ -17,9 +17,9 @@ const useIteration = (
 
   useEffect(() => {
     let ignore = false
-    setIsLoading(true)
-    setError(undefined)
     const loadIteration = async () => {
+      setIsLoading(true)
+      setError(undefined)
       try {
         const response = await fetch(
           `http://localhost:3333/${goodSubsetId}/${iteration}`
@@ -28,13 +28,14 @@ const useIteration = (
         if (!ignore) {
           setGraph(json.graph as any)
           setConvexPolytope(json.lp as any)
-          setIsLoading(false)
         }
       } catch (error) {
         if (!ignore) {
           setError(error)
-          setIsLoading(false)
         }
+      }
+      if (!ignore) {
+        setIsLoading(false)
       }
     }
     loadIteration()
