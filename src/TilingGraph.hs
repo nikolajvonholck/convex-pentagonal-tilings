@@ -141,6 +141,10 @@ runBends (R v a e) = case e of
   Nothing -> []
   Just (Edge _ r) -> if a == Zero then v : runBends r else runBends r
 
+leastVertexAlongRun :: Run -> Vertex
+leastVertexAlongRun (R v _ Nothing) = v
+leastVertexAlongRun (R v _ (Just (Edge _ r))) = min v $ leastVertexAlongRun r
+
 runSides :: Run -> [[Side]]
 runSides (R _ a e) = case e of
   Nothing -> [[]]
@@ -316,28 +320,30 @@ backtrack constructor alpha xs g lp =
   -- Conclusion: We will have to add another tile.
   do
     let maxVertexId = fst $ Map.findMax g -- initial 5.
-    let leastIncompleteVertexId = fst $ fromJust $ minWhere (\(_, is) -> not $ isVertexComplete is) g -- initial 1.
-    let nextIncVerCandidates = [v |
+    let defaultWeights = [(v, v) | v <- Map.keys $ Map.filter (not . isVertexComplete) g]
+    let twoBendWeights = [(v, weight) |
           run <- exteriorRuns g,
           let bends = runBends run,
           length bends == 2,
-          all (<= leastIncompleteVertexId) bends,
+          let weight = leastVertexAlongRun run,
           let (x, y) = runEnds run,
           v <- [x, y],
-          not (isVertexComplete (vertexInfoList g v))] ++ [leastIncompleteVertexId]
-    let nextIncVer = traceShow ("candidates", nextIncVerCandidates) (head nextIncVerCandidates)
+          not (isVertexComplete (vertexInfoList g v))]
+    let weights = defaultWeights ++ twoBendWeights
+    let leastWeight = minimum [w | (_, w) <- weights]
+    let incompleteVertex = minimum [v | (v, w) <- weights, w == leastWeight]
     orientation <- orientations -- Pick direction of new pentagon.
     let anotherTile = pentagonGraph maxVertexId orientation
     let disconnectedGraph = Map.unionWith (\_ _ -> error "Key clash!") g anotherTile
     corner <- interiorAngles
     let cornerVertexId = fst $ fromJust $ minWhere (\(_, is) -> any (\i -> angle i == Int corner) is) anotherTile
-    (g', lp') <- mergeVertices xs disconnectedGraph lp cornerVertexId nextIncVer Zero -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
+    (g', lp') <- mergeVertices xs disconnectedGraph lp cornerVertexId incompleteVertex Zero -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
     guard $ all (isRunValid xs g' lp') (exteriorRuns g')
     -- all possible completions will be handled inside 'mergeVertices'.
     let construction = constructor lp'
     guard $ isJust construction
     let lengths = approximateLengths $ fromJust construction
-    (g', lp', lengths) : backtrack constructor alpha xs (traceShow ("choice:", leastIncompleteVertexId, nextIncVer) g') lp'
+    (g', lp', lengths) : backtrack constructor alpha xs (traceShow ("choice:", incompleteVertex) g') lp'
 
 exhaustiveSearch :: VectorTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope Rational, Vector Rational)])
 exhaustiveSearch xs alpha =
