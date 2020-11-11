@@ -61,3 +61,7 @@
   border-color: black;
   color: black;
 }
+
+.error {
+  color: rgb(236, 31, 38);
+}
