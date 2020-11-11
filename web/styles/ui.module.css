@@ -10,7 +10,7 @@
 .sidebar {
   width: 300px;
   background-color: rgb(247, 247, 247);
-  padding: 0 0.5rem;
+  padding: 70px 30px;
   border-right-width: 1px;
   border-right-style: solid;
   border-right-color: rgb(236, 236, 236);
@@ -21,4 +21,43 @@
   flex-grow: 1;
   align-items: stretch;
   justify-content: stretch;
+}
+
+.sidebar .section {
+  font-size: 14px;
+  font-weight: bold;
+  height: 42px;
+  letter-spacing: 1.12px;
+  margin: 0;
+  padding-top: 7px;
+  padding-right: 7px;
+  text-transform: uppercase;
+}
+
+.sidebar .buttonContainer {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 10px;
+}
+
+.sidebar button {
+  display: flex;
+  flex-grow: 1;
+  flex-basis: 0;
+  justify-content: center;
+  -webkit-font-smoothing: antialiased;
+  border: 1px solid rgb(234, 234, 234);
+  border-radius: 5px;
+  background-color: white;
+  color: rgb(102, 102, 102);
+  margin: 0 10px;
+  font-size: 14px;
+  font-weight: 500;
+  height: 40px;
+  transition-duration: 0.1s;
+}
+
+.sidebar button:hover  {
+  border-color: black;
+  color: black;
 }

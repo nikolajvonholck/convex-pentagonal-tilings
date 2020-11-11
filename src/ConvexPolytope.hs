@@ -1,8 +1,10 @@
-module ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints) where
+module ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints, fromRationalConvexPolytope) where
 
 import Vector (Vector, zero, (|-|), (|*|), dot, isZero)
 import Matrix (rank)
-import AffineSubspace (AffineSubspace (..), HyperPlane (..), coordsInSpace, dimension, space, intersectWithHyperPlane)
+import AffineSubspace (AffineSubspace (..), HyperPlane (..), coordsInSpace, dimension, space, intersectWithHyperPlane, fromRationalAffineSubspace)
+import AlgebraicNumber
+import JSON
 
 import qualified Data.Set as Set
 import Data.Set (Set, elems, partition, insert, fromList)
@@ -32,7 +34,7 @@ satisfiesConstraint Strict  c x = evaluateConstraint c x == LT
 satisfiesConstraint NonStrict c x = evaluateConstraint c x /= GT
 
 projectConstraint :: (Fractional a, Ord a) => AffineSubspace a -> Constraint a -> Constraint a
-projectConstraint (ASS p bs) (Constraint vs q) =
+projectConstraint (ASS p bs _) (Constraint vs q) =
   let vs' = [vs `dot` b | b <- bs]
       q' = q - (p `dot` vs)
   in constraint vs' q'
@@ -46,7 +48,7 @@ localExtremePoints ass cs =
   in if extr == [] then Nothing else Just $ fromList extr
   where
     helper :: (Fractional a, Ord a) => Set (Constraint a) -> AffineSubspace a -> [Constraint a] -> [Vector a]
-    helper pcs (ASS p []) _ = -- The space is zero-dimensional, i.e. a single point.
+    helper pcs (ASS p [] _) _ = -- The space is zero-dimensional, i.e. a single point.
       [p | all (\pc -> satisfiesConstraint NonStrict pc p) pcs]
     helper pcs subspace toCheck =
       concat [ helper pcs subspace' cs' | sublist <- tails toCheck,
@@ -125,3 +127,28 @@ projectOntoHyperplane (cp@(CP strictness ass cs _)) hp =
 
 extremePoints :: (Num a, Ord a) => ConvexPolytope a -> Set (Vector a)
 extremePoints (CP _ ass _ extr) = Set.map (coordsInSpace ass) extr
+
+fromRationalConvexPolytope :: ConvexPolytope Rational -> ConvexPolytope AlgebraicNumber
+fromRationalConvexPolytope (CP strictness ass cs extr) =
+  let ass' = fromRationalAffineSubspace ass
+      cs' = Set.map (\(c, cp) -> (fromRationalConstraint c, fromRationalConstraint cp)) cs
+      extr' = Set.map (map fromRational) extr
+  in CP strictness ass' cs' extr'
+  where
+    fromRationalConstraint :: Constraint Rational -> Constraint AlgebraicNumber
+    fromRationalConstraint (Constraint vs q) =
+      Constraint (map fromRational vs) (fromRational q)
+
+instance JSON a => JSON (ConvexPolytope a) where
+  toJSON (CP _ ass cs _) =
+    jsonObject [
+      ("ass", toJSON ass),
+      ("cs", toJSON $ map fst $ Set.elems cs)
+    ]
+
+instance JSON a => JSON (Constraint a) where
+  toJSON (Constraint vs q) =
+    jsonObject [
+      ("t", toJSON vs),
+      ("c", toJSON q)
+    ]

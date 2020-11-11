@@ -1,13 +1,14 @@
-module TilingGraph (TilingGraph, exhaustiveSearch, planarize, InteriorAngle(..), ExteriorAngle(..), Angle(..), Side(..), VertexWithLocation(..), VertexInfo(..)) where
+module TilingGraph (TilingGraph, exhaustiveSearch, planarize) where
 
 import Vector (Vector, zero, (|+|), (|-|), (|*|))
 import GoodSubsets (VectorType, VectorTypeSet)
 import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
-import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
+import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, fromRationalConvexPolytope)
 import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
 import ChebyshevPolynomial (commonDenominator, cosineFieldExtension, sinePoly, cosinePoly)
 import Data.List (genericTake, (\\))
 import Utils ((!), zipPedantic)
+import JSON
 
 -- import qualified Data.Set as Set
 import Data.List (genericLength)
@@ -30,8 +31,8 @@ data Side = EOne | ETwo | EThree | EFour | EFive deriving (Show, Eq)
 
 data Orientation = CounterClockwise | ClockWise
 
-asAlgNum :: Vector Integer -> Vector AlgebraicNumber
-asAlgNum = map fromInteger
+asRational :: Vector Integer -> Vector Rational
+asRational = map fromInteger
 
 orientations :: [Orientation]
 orientations = [CounterClockwise, ClockWise]
@@ -189,19 +190,19 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
-isRunValid :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> Run -> Bool
+isRunValid :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> Run -> Bool
 isRunValid xs g lp r =
   let (x, y) = runEnds r
   in case map lengthType $ runSides r of
     [la, lb] ->
-      let cs = asAlgNum $ la |-| lb -- la < lb
+      let cs = asRational $ la |-| lb -- la < lb
       in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
         (Just _, Nothing, Nothing) -> isVertexValidHalfVertex xs $ vertexInfoList g x
         (Nothing, Just _, Nothing) -> error "Impossible: Vertices should already have been merged."
         (Nothing, Nothing, Just _) -> isVertexValidHalfVertex xs $ vertexInfoList g y
         _ -> error "Impossible: Run has not been decided."
     [la, lb, lc] ->
-      let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
+      let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
       in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
         (Just _, Nothing, Nothing) -> isVertexValidHalfVertex xs (vertexInfoList g x) && isVertexValidHalfVertex xs (vertexInfoList g y)
         (Nothing, Just _, Nothing) -> error "Impossible: Vertices should already have been merged."
@@ -242,7 +243,7 @@ isVertexValid xs is =
       then cvt `member` xs
       else any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs
 
-vertexCompletions :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+vertexCompletions :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational)]
 vertexCompletions xs g lp =
   if any (\is -> not $ isVertexValid xs is) g then []
     else case Map.lookupMin $ Map.filter isJust $ Map.map (completeVertex xs) g of -- Find completable vertex.
@@ -253,12 +254,12 @@ vertexCompletions xs g lp =
       _ -> error "Impossible."
 
 -- (v, i) is the affected vertex and angle, so we should consider the induced run.
-completeRun :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> (Vertex, VertexInfo) -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+completeRun :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> (Vertex, VertexInfo) -> [(TilingGraph, ConvexPolytope Rational)]
 completeRun xs g lp (v, i) =
   let r = getRun g v i
       (x, y) = runEnds r
       checked = case map lengthType $ runSides r of
-        [la, lb] -> let cs = asAlgNum $ la |-| lb -- la < lb
+        [la, lb] -> let cs = asRational $ la |-| lb -- la < lb
           in [(g, lp') | let lp'' = cutHalfSpace lp (constraint cs 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g, lp') | let lp'' = cutHalfSpace lp (constraint ((-1) |*| cs) 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g', lp') | let lp'' = projectOntoHyperplane lp (HP cs 0),
@@ -266,7 +267,7 @@ completeRun xs g lp (v, i) =
                             let (Just lp') = lp'',
                             let (g', v', _) = mergeTwoVertices g x y Zero,
                             isVertexValid xs $ vertexInfoList g' v']
-        [la, lb, lc] -> let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
+        [la, lb, lc] -> let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
           in [(g, lp') | let lp'' = cutHalfSpace lp (constraint cs 0), isJust lp'', let (Just lp') = lp'']
             ++ [(g', lp') | let lp'' = projectOntoHyperplane lp (HP cs 0),
                             isJust lp'',
@@ -294,7 +295,7 @@ mergeTwoVertices g v v' a =
       g'' = Map.map (map (\(VertexInfo a' w s) -> VertexInfo a' (if w == vOut then v'' else w) s)) g'
   in (g'', v'', i')
 
-mergeVertices :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+mergeVertices :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
 mergeVertices xs g lp v v' a =
   do
     let (g'', v'', i') = mergeTwoVertices g v v' a
@@ -310,8 +311,8 @@ mergeVertices xs g lp v v' a =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exteriror (pi/empty) angles.
-backtrack :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
-backtrack xs g lp =
+backtrack :: PolygonConstructor -> Vector Rational -> VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
+backtrack constructor alpha xs g lp =
   -- Conclusion: We will have to add another tile.
   do
     let maxVertexId = fst $ Map.findMax g -- initial 5.
@@ -333,35 +334,38 @@ backtrack xs g lp =
     (g', lp') <- mergeVertices xs disconnectedGraph lp cornerVertexId nextIncVer Zero -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
     guard $ all (isRunValid xs g' lp') (exteriorRuns g')
     -- all possible completions will be handled inside 'mergeVertices'.
-    -- TODO: Consider guard isConstructible g' lp'
-    traceBacktrack xs (traceShow ("choice:", leastIncompleteVertexId, nextIncVer) g') lp'
+    let construction = constructor lp'
+    guard $ isJust construction
+    let lengths = approximateLengths $ fromJust construction
+    (g', lp', lengths) : backtrack constructor alpha xs (traceShow ("choice:", leastIncompleteVertexId, nextIncVer) g') lp'
 
-traceBacktrack :: VectorTypeSet -> TilingGraph -> ConvexPolytope AlgebraicNumber -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
-traceBacktrack xs g lp =
-  (g, lp) : backtrack xs g lp
-
-exhaustiveSearch :: VectorTypeSet -> Vector Rational -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+exhaustiveSearch :: VectorTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope Rational, Vector Rational)])
 exhaustiveSearch xs alpha =
   let s = angleSum (traceShow alpha alpha)
       (ps, q) = commonDenominator s
       r = cosineFieldExtension q
       sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
       cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
+      constructor = constructPolygon [sineConstraint, cosineConstraint]
       g = (pentagonGraph 0 CounterClockwise)
       lp = do
         ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1)]
-        cp <- boundedConvexPolytope Strict ass $ Set.fromList [
+        boundedConvexPolytope Strict ass $ Set.fromList [
             constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
             constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
             constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,
             constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
             constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
           ] -- (0, 1)^5
-        foldM projectOntoHyperplane cp [sineConstraint, cosineConstraint]
   in case traceShow (xs, alpha, s) lp of
     Nothing -> []
-    Just lp' -> (g, lp') : backtrack xs g lp'
+    Just lp' -> backtrack constructor alpha xs g lp'
 
+type PolygonConstructor = ConvexPolytope Rational -> Maybe (ConvexPolytope AlgebraicNumber)
+
+constructPolygon :: [HyperPlane AlgebraicNumber] -> PolygonConstructor
+constructPolygon cs lp =
+  foldM projectOntoHyperplane (fromRationalConvexPolytope lp) cs
 
 -- TODO: Consider defining the two pentagons (in each direction) and using a map to offset vertex ids.
 pentagonGraph :: Vertex -> Orientation -> TilingGraph
@@ -389,13 +393,17 @@ minWhere p m = find p (Map.toAscList m)
 -- The code below is only related to the visualization of the tiling graph.
 data VertexWithLocation = VWL Double Double [VertexInfo] deriving (Show, Eq)
 
-planarize :: Vector Rational -> TilingGraph -> ConvexPolytope AlgebraicNumber -> Map Vertex VertexWithLocation
-planarize alpha g lp =
-  helper $ Map.fromList [(1, VWL 0 0 (vertexInfoList g 1)), (2, VWL (lengthNum lengths EOne) 0 (vertexInfoList g 2))]
+approximateLengths :: ConvexPolytope AlgebraicNumber -> Vector Rational
+approximateLengths lp =
+  let lengthsExtr = elems $ extremePoints lp
+  in map (approximate 0.001) $ (1 / (fromInteger $ genericLength lengthsExtr)) |*| (foldl (|+|) (zero 5) lengthsExtr)
+
+planarize :: Vector Rational -> Vector Rational -> TilingGraph -> Map Vertex VertexWithLocation
+planarize alpha lengths g =
+  helper $ Map.fromList [(1, VWL 0 0 (vertexInfoList g 1)), (2, VWL (lengthNum approxLengths EOne) 0 (vertexInfoList g 2))]
   where
     approxAlpha = map fromRational alpha
-    lengthsExtr = elems $ extremePoints lp
-    lengths = map (fromRational . (approximate 0.001)) $ (1 / (fromInteger $ genericLength lengthsExtr)) |*| (foldl (|+|) (zero 5) lengthsExtr)
+    approxLengths = map fromRational lengths
     helper :: Map Vertex VertexWithLocation -> Map Vertex VertexWithLocation
     helper gl =
       let vWithL = Map.keys gl
@@ -404,7 +412,7 @@ planarize alpha g lp =
         vWithoutL ->
           let v = fromJust $ find (\w -> any (`elem` vWithL) [vertex i | i <- vertexInfoList g w]) vWithoutL
               is = vertexInfoList g v
-          in helper $ Map.insert v (determineLocation approxAlpha lengths gl v is) gl
+          in helper $ Map.insert v (determineLocation approxAlpha approxLengths gl v is) gl
 
 determineLocation :: Vector Double -> Vector Double -> Map Vertex VertexWithLocation -> Vertex -> [VertexInfo] -> VertexWithLocation
 determineLocation as ls gl v is =
@@ -447,3 +455,42 @@ lengthNum lengths s = case s of
 
 calcAngles :: Vector Double -> [VertexInfo] -> [Double]
 calcAngles alpha is = tail $ scanl (\acc i -> acc + angleNum alpha (angle i)) 0 is
+
+instance JSON VertexWithLocation where
+  toJSON (VWL x y is) =
+    jsonObject [
+      ("x", toJSON x),
+      ("y", toJSON y),
+      ("edges", toJSON is)
+    ]
+
+instance JSON VertexInfo where
+  toJSON (VertexInfo a v s) =
+    jsonObject [
+      ("a", toJSON a),
+      ("v", show $ toJSON v),
+      ("s", show $ toJSON s)
+    ]
+
+instance JSON Angle where
+  toJSON (Int a) = show $ toJSON a
+  toJSON (Ext a) = show $ toJSON a
+
+instance JSON InteriorAngle where
+  toJSON AOne = "1"
+  toJSON ATwo = "2"
+  toJSON AThree = "3"
+  toJSON AFour = "4"
+  toJSON AFive = "5"
+
+instance JSON ExteriorAngle where
+  toJSON Unknown = "?"
+  toJSON Zero = "0"
+  toJSON Pi = "pi"
+
+instance JSON Side where
+  toJSON EOne = "1"
+  toJSON ETwo = "2"
+  toJSON EThree = "3"
+  toJSON EFour = "4"
+  toJSON EFive = "5"

@@ -14,3 +14,7 @@ a {
 * {
   box-sizing: border-box;
 }
+
+.katex {
+  font-size: 18px !important;
+}

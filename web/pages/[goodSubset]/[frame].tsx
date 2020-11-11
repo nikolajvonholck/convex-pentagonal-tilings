@@ -1,41 +1,25 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import styles from '../../styles/ui.module.css'
 import { NextPage } from 'next'
 import Graph from '../../components/Graph'
-import Angle from '../../components/Angle'
+import ConvexPolytope from '../../components/ConvexPolytope'
+import useIteration from '../../hooks/useIteration'
 
 const Home: NextPage = () => {
   const router = useRouter()
   const { goodSubset, frame } = router.query
   const goodSubsetId = parseInt(goodSubset as string)
-  const frameIndex = parseInt(frame as string)
-  const hasValidParams = goodSubsetId >= 0 && frameIndex >= 0
+  const iteration = parseInt(frame as string)
 
-  const [graph, setGraph] = useState(undefined)
+  const [graph, convexPolytope] = useIteration(goodSubsetId, iteration)
 
-  const loadGraph = async () => {
-    try {
-      const response = await fetch(
-        `http://localhost:3333/${goodSubsetId}/${frameIndex}`
-      )
-      const json = await response.json()
-      setGraph(json as any)
-    } catch (error) {
-      console.error(error)
-    }
-  }
+  const goToIteration = (iteration) =>
+    router.push(`/${goodSubsetId}/${iteration}`)
 
-  useEffect(() => {
-    if (hasValidParams) {
-      loadGraph()
-    }
-  }, [goodSubsetId, frameIndex])
-
-  if (!hasValidParams) {
-    return null
-  }
+  const nextIteration = iteration + 1
+  const prevIteration = Math.max(iteration - 1, 0)
 
   return (
     <div className={styles.container}>
@@ -43,23 +27,18 @@ const Home: NextPage = () => {
         <title>Convex Pentagonal Tilings</title>
       </Head>
       <div className={styles.sidebar}>
-        <h2>
-          Frame {frameIndex} of tiling of good subset with index {goodSubsetId}
-        </h2>
-        <button
-          type='button'
-          onClick={() =>
-            router.push(`/${goodSubsetId}/${Math.max(frameIndex - 1, 0)}`)
-          }
-        >
-          Load previous frame
-        </button>
-        <button
-          type='button'
-          onClick={() => router.push(`/${goodSubsetId}/${frameIndex + 1}`)}
-        >
-          Load next frame
-        </button>
+        <div className={styles.section}>Good subset: {goodSubsetId}</div>
+        <div className={styles.section}>Iteration: {iteration}</div>
+        <div className={styles.buttonContainer}>
+          <button type='button' onClick={() => goToIteration(prevIteration)}>
+            Previous
+          </button>
+          <button type='button' onClick={() => goToIteration(nextIteration)}>
+            Next
+          </button>
+        </div>
+        <div className={styles.section}>Length constraints</div>
+        {convexPolytope && <ConvexPolytope cp={convexPolytope} />}
       </div>
       <div className={styles.graphContainer}>
         {graph && <Graph graph={graph} />}

@@ -17,7 +17,6 @@ import Data.Set (fromList, elems)
 import Vector (Vector)
 import JSON
 import ConvexPolytope (ConvexPolytope, extremePoints)
-import AlgebraicNumber (AlgebraicNumber)
 import qualified Data.Map as Map
 import Data.Map (Map, (!?))
 import Data.List (genericIndex)
@@ -27,7 +26,7 @@ main = do
   lists <- backtrackings
   startServer $ server $ makeResponder lists
 
-backtrackings :: IO (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope AlgebraicNumber)]))
+backtrackings :: IO (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope Rational, Vector Rational)]))
 backtrackings = do
   contents <- readFile "data/michael-rao-good-subsets.txt"
   let raoGenerators = read contents :: [[[Integer]]]
@@ -55,8 +54,13 @@ server res req respond = respond $
           Nothing -> responseLBS status404 [(hContentType, "text/plain")] "Invalid input"
       _ -> responseLBS status200 [(hContentType, "text/plain")] $ "Convex pentagonal tiling server."
 
-makeResponder :: (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope AlgebraicNumber)])) -> Integer -> Integer -> String
+makeResponder :: (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope Rational, Vector Rational)])) -> Integer -> Integer -> String
 makeResponder lists i k =
   case lists !? i of
     Nothing -> "Good subset not found: " ++ show i
-    Just (alpha, backtracks) -> let (g, lp) = backtracks `genericIndex` k in toJSON (planarize alpha g lp)
+    Just (alpha, backtracks) ->
+      let (g, lp, lengths) = backtracks `genericIndex` k
+      in jsonObject [
+        ("graph", toJSON (planarize alpha lengths g)),
+        ("lp", toJSON lp)
+      ]
