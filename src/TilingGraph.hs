@@ -10,14 +10,13 @@ import Data.List (genericTake, (\\))
 import Utils ((!), zipPedantic)
 import JSON
 
--- import qualified Data.Set as Set
 import Data.List (genericLength)
 import Data.Set (member, elems)
-import qualified Data.Map.Strict as Map -- TODO: Consider type of map (strict?, hashmap?, intmap?)
-import Data.Map (Map, insert, delete, fromList)
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map, insert, delete, fromList)
 import Data.Maybe (fromJust, isJust)
 import Data.List (find)
-import Control.Monad (guard, when, foldM)
+import Control.Monad (guard, foldM)
 
 import Debug.Trace (traceShow)
 
@@ -73,7 +72,7 @@ sides = [EOne, ETwo, EThree, EFour, EFive]
 interiorAngles :: [InteriorAngle]
 interiorAngles = [AOne, ATwo, AThree, AFour, AFive]
 
--- nextVertex, map from Vertex to edges with sattelite info: edge comes after angle in counterclockwise rotation around vertex.
+-- Map from Vertex to edges with sattelite info: edge comes after angle in counterclockwise rotation around vertex.
 -- Maintained invariants:
 --   • Each vertex has at most one unknown angle and it must be the first angle.
 type TilingGraph = Map Vertex [VertexInfo]
@@ -93,20 +92,6 @@ correctedVectorType is =
 
 isVertexHalf :: [VertexInfo] -> Bool
 isVertexHalf = any ((Ext Pi==) . angle)
--- TODO: Check for multiple PI-angles.
-
--- Returns final vertex info list along with the adjusted vertex info
--- that can be used to determine the affected run.
-completeVertex :: VectorTypeSet -> [VertexInfo] -> Maybe ([VertexInfo], VertexInfo)
-completeVertex xs iss =
-  case iss of
-    ((VertexInfo (Ext Unknown) v s):is) -> do
-        a <- if correctedVectorType is `member` xs then Just Zero
-             else if 2 |*| vectorType is `member` xs then Just Pi
-             else Nothing
-        let i' = (VertexInfo (Ext a) v s)
-        return (i':is, i')
-    _ -> Nothing
 
 vertexInfoList :: TilingGraph -> Vertex -> [VertexInfo]
 vertexInfoList g v = case Map.lookup v g of
@@ -123,6 +108,26 @@ vertexInfoAfter g v i = helper $ wrappedVertexInfoList g v
     helper (x:y:zs) = if x == i then y else helper (y:zs)
     helper _ = error "Could not find vertex info before."
 
+-- Counts the number of each length along the run.
+lengthType :: [Side] -> Vector Integer
+lengthType ss = [genericLength $ filter (s==) ss | s <- sides]
+
+isVertexValidHalfVertex :: VectorTypeSet -> [VertexInfo] -> Bool
+isVertexValidHalfVertex xs is =
+  let numPIs = length (filter ((Ext Pi==) . angle) is)
+      cvt = 2 |*| vectorType is
+  in if isVertexComplete is
+    then numPIs == 1 && cvt `member` xs
+    else numPIs == 0 && (any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs)
+
+isVertexValid :: VectorTypeSet -> [VertexInfo] -> Bool
+isVertexValid xs is =
+  length (filter ((Ext Pi==) . angle) is) <= 1 &&
+    let cvt = correctedVectorType is
+    in if isVertexComplete is
+      then cvt `member` xs
+      else any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs
+
 -- Runs counterclockwise in the sense that:
 --  - Outermost vertex is clockwise end.
 --  - Innermost vertex is counterclockwise end.
@@ -132,7 +137,7 @@ data Edge = Edge Side Run deriving (Show)
 -- (counterclockwise beginning, clockwise end)
 runEnds :: Run -> (Vertex, Vertex)
 runEnds (R v _ e) = case e of
-  Nothing -> (error "Impossible", v)
+  Nothing -> (error "Impossible: Run of length zero", v)
   Just (Edge _ r) -> (v, snd $ runEnds r)
 
 runBends :: Run -> [Vertex]
@@ -193,120 +198,85 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
-isRunValid :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> Run -> Bool
-isRunValid xs g lp r =
-  let (x, y) = runEnds r
-  in case map lengthType $ runSides r of
-    [la, lb] ->
-      let cs = asRational $ la |-| lb -- la < lb
-      in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
-        (Just _, Nothing, Nothing) -> isVertexValidHalfVertex xs $ vertexInfoList g x
-        (Nothing, Just _, Nothing) -> error "Impossible: Vertices should already have been merged."
-        (Nothing, Nothing, Just _) -> isVertexValidHalfVertex xs $ vertexInfoList g y
-        _ -> error "Impossible: Run has not been decided."
-    [la, lb, lc] ->
-      let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
-      in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
-        (Just _, Nothing, Nothing) -> isVertexValidHalfVertex xs (vertexInfoList g x) && isVertexValidHalfVertex xs (vertexInfoList g y)
-        (Nothing, Just _, Nothing) -> error "Impossible: Vertices should already have been merged."
-        (Nothing, Nothing, Just _) -> error "Impossible: Violation of triangle inequality."
-        _ -> error "Impossible: Run has not been decided."
-    [_] -> True
-    _ -> error "Impossible: Malformed run."
-
-getRun :: TilingGraph -> Vertex -> VertexInfo -> Run
-getRun g v (VertexInfo (Ext a) v' s) =
-  let runs = exteriorRuns g
-  in fromJust $ find runHasEdge runs
+completeRuns :: VectorTypeSet -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
+completeRuns xs (g, lp) = completeRuns' $ exteriorRuns g
   where
-    runHasEdge :: Run -> Bool
-    runHasEdge (R _ _ Nothing) = False
-    runHasEdge (R w a' (Just (Edge s' r'))) =
-      let (R w' _ _) = r'
-      in (v, v', a, s) == (w, w', a', s') || runHasEdge r'
-getRun _ _ (VertexInfo (Int _) _ _) = error "Can not find run with interior angle."
+    completeRuns' :: [Run] -> [(TilingGraph, ConvexPolytope Rational)]
+    completeRuns' [] = [(g, lp)]
+    completeRuns' (r:rs) =
+      let (x, y) = runEnds r
+      in case map lengthType $ runSides r of
+        [_] -> completeRuns' rs -- No bends to check. Skip this run.
+        [la, lb] ->
+          let cs = asRational $ la |-| lb -- la < lb
+          in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
+            (Just _, Nothing, Nothing) ->
+              do
+                guard $ isVertexValidHalfVertex xs (vertexInfoList g x)
+                completeRuns' rs
+            (Nothing, Just _, Nothing) -> mergeVertices xs (g, lp) x y Zero
+            (Nothing, Nothing, Just _) ->
+              do
+                guard $ isVertexValidHalfVertex xs (vertexInfoList g y)
+                completeRuns' rs
+            (lpleq, lpeq, lpgeq) -> -- Decide run.
+              case sequence [lpleq, lpeq, lpgeq] of
+                Nothing -> error "Impossible: There should always be an option"
+                Just lps' -> do lp' <- lps'; completeRuns xs (g, lp')
+        [la, lb, lc] ->
+          let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
+          in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0)) of
+            (Just _, Nothing) ->
+              do
+                guard $ isVertexValidHalfVertex xs (vertexInfoList g x)
+                guard $ isVertexValidHalfVertex xs (vertexInfoList g y)
+                completeRuns' rs
+            (Nothing, Just _) -> mergeVertices xs (g, lp) x y Pi
+            (lpleq, lpeq) -> -- Decide run.
+              case sequence [lpleq, lpeq] of
+                Nothing -> [] -- Backtrack: Violation of triangle inequality.
+                Just lps' -> do lp' <- lps'; completeRuns xs (g, lp')
+        _ -> [] -- Backtrack: Invalid run.
 
--- Counts the number of each length along the run.
-lengthType :: [Side] -> Vector Integer
-lengthType ss = [genericLength $ filter (s==) ss | s <- sides]
+-- There might be completable runs in input graph.
+completeVertices :: VectorTypeSet -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
+completeVertices xs (g, lp) =
+  let g' = Map.map completeVertex g
+  in completeRuns xs (g', lp)
+  where
+    -- Returns completed vertex info list if the vertex can be completed.
+    -- Return Nothing if vertex is already complete or if can not be completed.
+    completeVertex :: [VertexInfo] -> [VertexInfo]
+    completeVertex iss =
+      case iss of
+        ((VertexInfo (Ext Unknown) v s):is) ->
+            let a = if 2 |*| vectorType is `member` xs then Pi else
+                    if correctedVectorType is `member` xs then Zero
+                    else Unknown
+            in (VertexInfo (Ext a) v s):is
+        _ -> iss
 
-isVertexValidHalfVertex :: VectorTypeSet -> [VertexInfo] -> Bool
-isVertexValidHalfVertex xs is =
-  let numPIs = length (filter ((Ext Pi==) . angle) is)
-      cvt = 2 |*| vectorType is
-  in if isVertexComplete is
-    then numPIs == 1 && cvt `member` xs
-    else numPIs == 0 && (any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs)
-
-isVertexValid :: VectorTypeSet -> [VertexInfo] -> Bool
-isVertexValid xs is =
-  length (filter ((Ext Pi==) . angle) is) <= 1 &&
-    let cvt = correctedVectorType is
-    in if isVertexComplete is
-      then cvt `member` xs
-      else any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs
-
-vertexCompletions :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational)]
-vertexCompletions xs g lp =
-  if any (\is -> not $ isVertexValid xs is) g then []
-    else case Map.lookupMin $ Map.filter isJust $ Map.map (completeVertex xs) g of -- Find completable vertex.
-      Nothing -> [(g, lp)] -- No more vertices can be completed at this time.
-      Just (v, Just (is', i)) ->
-        let g'' = insert v is' g -- Update vertex info for vertex v. TODO: Consider using Map.adjust.
-        in concat [vertexCompletions xs g' lp' | (g', lp') <- completeRun xs g'' lp (v, i)]
-      _ -> error "Impossible."
-
--- (v, i) is the affected vertex and angle, so we should consider the induced run.
-completeRun :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> (Vertex, VertexInfo) -> [(TilingGraph, ConvexPolytope Rational)]
-completeRun xs g lp (v, i) =
-  let r = getRun g v i
-      (x, y) = runEnds r
-      checked = case map lengthType $ runSides r of
-        [la, lb] -> let cs = asRational $ la |-| lb -- la < lb
-          in [(g, lp') | let lp'' = cutHalfSpace lp (constraint cs 0), isJust lp'', let (Just lp') = lp'']
-            ++ [(g, lp') | let lp'' = cutHalfSpace lp (constraint ((-1) |*| cs) 0), isJust lp'', let (Just lp') = lp'']
-            ++ [(g', lp') | let lp'' = projectOntoHyperplane lp (HP cs 0),
-                            isJust lp'',
-                            let (Just lp') = lp'',
-                            let (g', v', _) = mergeTwoVertices g x y Zero,
-                            isVertexValid xs $ vertexInfoList g' v']
-        [la, lb, lc] -> let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
-          in [(g, lp') | let lp'' = cutHalfSpace lp (constraint cs 0), isJust lp'', let (Just lp') = lp'']
-            ++ [(g', lp') | let lp'' = projectOntoHyperplane lp (HP cs 0),
-                            isJust lp'',
-                            let (Just lp') = lp'',
-                            let (g', v', _) = mergeTwoVertices g x y Pi,
-                            isVertexValid xs $ vertexInfoList g' v']
-        [_] -> [(g, lp)]
-        _ -> []
-  in do
-    (g', lp') <- checked
-    vertexCompletions xs g' lp'
-
--- v is first in run, v' is last (counterclockwise rotation/run around graph)
--- vertex (min v v') is kept, while (max v v') is discarded.
-mergeTwoVertices :: TilingGraph -> Vertex -> Vertex -> ExteriorAngle -> (TilingGraph, Vertex, VertexInfo)
-mergeTwoVertices g v v' a =
-  let (v'', vOut) = (min v v', max v v') -- Choose least vertex index.
-      (iss, i') = case (vertexInfoList g v, vertexInfoList g v') of
-        ((VertexInfo (Ext Unknown) w s):is, (VertexInfo (Ext Unknown) w' s'):is') ->
-          let i'' = VertexInfo (Ext a) w s
-          in (((VertexInfo (Ext Unknown) w' s'):is') ++ (i'':is), i'')
-        _ -> error "Merging vertices must be incomplete."
-      g' = insert v'' iss $ delete vOut g
-      -- TODO: Consider assert that i' does not mention v or v'. (it should not be 'outdated')
-      g'' = Map.map (map (\(VertexInfo a' w s) -> VertexInfo a' (if w == vOut then v'' else w) s)) g'
-  in (g'', v'', i')
-
-mergeVertices :: VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
-mergeVertices xs g lp v v' a =
-  do
-    let (g'', v'', i') = mergeTwoVertices g v v' a
-    let info = vertexInfoList g'' v''
-    when (i' `notElem` info) (error "i' was changed during merge.")
-    guard $ isVertexValid xs info -- Abandon early if merged vertex can never be completed.
-    -- TODO: Maybe check half vertices??
-    completeRun xs g'' lp (v'', i') -- Note if v'' can be completed, it will happen inside of here.
+mergeVertices :: VectorTypeSet -> (TilingGraph, ConvexPolytope Rational) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
+mergeVertices xs (g, lp) v v' a =
+  case mergeTwoVertices of
+    Nothing -> []
+    Just g' -> completeVertices xs (g', lp) -- Note if v'' can be completed, it will happen inside of here.
+  where
+    -- v is first in run, v' is last (counterclockwise rotation/run around graph)
+    -- vertex (min v v') is kept, while (max v v') is discarded.
+    mergeTwoVertices :: Maybe TilingGraph
+    mergeTwoVertices =
+      let (v'', vOut) = (min v v', max v v') -- Choose least vertex index.
+          iss = case (vertexInfoList g v, vertexInfoList g v') of
+            ((VertexInfo (Ext Unknown) w s):is, (VertexInfo (Ext Unknown) w' s'):is') ->
+              ((VertexInfo (Ext Unknown) w' s'):is') ++ ((VertexInfo (Ext a) w s):is)
+            _ -> error "Merging vertices must be incomplete."
+      in do
+        guard $ isVertexValid xs iss -- Abandon early if merged vertex can never be completed.
+        let g' = insert v'' iss $ delete vOut g
+        -- TODO: Consider assert that i' does not mention v or v'. (it should not be 'outdated')
+        -- TODO: also consider-ish: when (i' `notElem` info) (error "i' was changed during merge.")
+        return $ Map.map (map (\(VertexInfo a' w s) -> VertexInfo a' (if w == vOut then v'' else w) s)) g'
 
 -- Assumes all possible completions performed.
 -- Assumptions:
@@ -336,11 +306,11 @@ backtrack constructor alpha xs g lp =
     let disconnectedGraph = Map.unionWith (\_ _ -> error "Key clash!") g anotherTile
     corner <- interiorAngles
     let cornerVertexId = fst $ fromJust $ minWhere (\(_, is) -> any (\i -> angle i == Int corner) is) anotherTile
-    (g', lp') <- mergeVertices xs disconnectedGraph lp cornerVertexId incompleteVertex Zero -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
-    guard $ all (isRunValid xs g' lp') (exteriorRuns g')
-    -- all possible completions will be handled inside 'mergeVertices'.
+    -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
+    (g', lp') <- mergeVertices xs (disconnectedGraph, lp) cornerVertexId incompleteVertex Zero
+    -- All possible completions will be handled inside 'mergeVertices'.
     let construction = constructor lp'
-    guard $ isJust construction
+    guard $ lp == lp' || isJust construction
     let lengths = approximateLengths $ fromJust construction
     (g', lp', lengths) : backtrack constructor alpha xs (traceShow ("choice:", incompleteVertex) g') lp'
 
@@ -395,6 +365,8 @@ angleSum as = [fromInteger i - 1 - (sum $ genericTake (i - 1) (tail as)) | i <- 
 minWhere :: ((k, v) -> Bool) -> Map k v -> Maybe (k, v)
 minWhere p m = find p (Map.toAscList m)
 
+
+-- TODO: Consider moving some of it to Javascript UI.
 -- The code below is only related to the visualization of the tiling graph.
 data VertexWithLocation = VWL Double Double [VertexInfo] deriving (Show, Eq)
 

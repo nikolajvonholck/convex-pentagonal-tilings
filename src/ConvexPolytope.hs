@@ -10,15 +10,20 @@ import qualified Data.Set as Set
 import Data.Set (Set, elems, fromList)
 import Data.List (find, tails, partition, nub)
 import Control.Monad (guard)
+import Data.Maybe (isJust)
 
 -- <= or < depending on strictness. Constraints should always be normalized, so
 -- the constructor should be considered private.
 data Constraint a = Constraint (Vector a) a deriving (Eq, Ord, Show)
 
-data Strictness = NonStrict | Strict deriving (Show)
+data Strictness = NonStrict | Strict deriving (Eq, Show)
 
 -- CP strictness ass cs extr
 data ConvexPolytope a = CP Strictness (AffineSubspace a) [(Constraint a, Constraint a)] (Set (Vector a)) deriving (Show)
+
+instance Eq a => Eq (ConvexPolytope a) where
+  (CP s ass _ extr) == (CP s' ass' _ extr') =
+    (s, ass, extr) == (s', ass', extr')
 
 constraint :: (Fractional a, Ord a) => Vector a -> a -> Constraint a
 constraint vs q =
@@ -55,7 +60,7 @@ localExtremePoints ass cs =
                  sublist /= [],
                  let (Constraint vs q):cs' = sublist,
                  let intersection = intersectWithHyperPlane subspace (HP vs q),
-                 intersection /= Nothing,
+                 isJust intersection,
                  let Just subspace' = intersection]
 
 -- Returns Nothing if some constraint is violated.
