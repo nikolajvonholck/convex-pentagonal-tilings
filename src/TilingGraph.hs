@@ -234,51 +234,34 @@ completeRuns xss (g, lp) = completeRuns' $ exteriorRuns g
                 Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
         _ -> [] -- Backtrack: Invalid run.
 
--- There might be completable runs in input graph.
-completeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
-completeVertices xss (g, lp) =
-  let g' = Map.map completeVertex g
-  in completeRuns xss (g', lp)
-  where
-    -- Returns completed vertex info list if the vertex can be completed.
-    -- Return Nothing if vertex is already complete or if can not be completed.
-    completeVertex :: [VertexInfo] -> [VertexInfo]
-    completeVertex iss =
-      let pis = length (filter ((Ext Pi==) . angle) iss)
-      in case iss of
-        ((VertexInfo (Ext Unknown) v s):is) ->
-            let vt = vectorType is
-                a = if vt `member` snd xss then
-                      case pis of
-                        0 -> Pi
-                        1 -> Zero
-                        _ -> error "Impossible: Multiple π angles!"
-                    else if vt `member` fst xss then Zero
-                    else Unknown
-            in (VertexInfo (Ext a) v s):is
-        _ -> iss
-
+-- v is first in run, v' is last (counterclockwise rotation/run around graph)
+-- vertex (min v v') is kept, while (max v v') is discarded.
 mergeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
 mergeVertices xss (g, lp) v v' a =
-  case mergeTwoVertices of
-    Nothing -> []
-    Just g' -> completeVertices xss (g', lp) -- Note if v'' can be completed, it will happen inside of here.
+  do
+    let (v'', vOut) = (min v v', max v v') -- Choose least vertex index.
+    let iss = case (vertexInfoList g v, vertexInfoList g v') of
+          ((VertexInfo (Ext Unknown) w s):is, (VertexInfo (Ext Unknown) w' s'):is') ->
+            ((VertexInfo (Ext Unknown) w' s'):is') ++ ((VertexInfo (Ext a) w s):is)
+          _ -> error "Merging vertices must be incomplete."
+    guard $ isVertexValid xss iss -- Backtrack if merged vertex can never be completed.
+    let iss' = completeVertex iss
+    let g' = Map.map (map (\(VertexInfo a' w s) -> VertexInfo a' (if w == vOut then v'' else w) s)) $ insert v'' iss' $ delete vOut g
+    completeRuns xss (g', lp) -- There might be completable runs.
   where
-    -- v is first in run, v' is last (counterclockwise rotation/run around graph)
-    -- vertex (min v v') is kept, while (max v v') is discarded.
-    mergeTwoVertices :: Maybe TilingGraph
-    mergeTwoVertices =
-      let (v'', vOut) = (min v v', max v v') -- Choose least vertex index.
-          iss = case (vertexInfoList g v, vertexInfoList g v') of
-            ((VertexInfo (Ext Unknown) w s):is, (VertexInfo (Ext Unknown) w' s'):is') ->
-              ((VertexInfo (Ext Unknown) w' s'):is') ++ ((VertexInfo (Ext a) w s):is)
-            _ -> error "Merging vertices must be incomplete."
-      in do
-        guard $ isVertexValid xss iss -- Abandon early if merged vertex can never be completed.
-        let g' = insert v'' iss $ delete vOut g
-        -- TODO: Consider assert that i' does not mention v or v'. (it should not be 'outdated')
-        -- TODO: also consider-ish: when (i' `notElem` info) (error "i' was changed during merge.")
-        return $ Map.map (map (\(VertexInfo a' w s) -> VertexInfo a' (if w == vOut then v'' else w) s)) g'
+    -- Returns vertex info list, completed if possible.
+    completeVertex :: [VertexInfo] -> [VertexInfo]
+    completeVertex (iss@((VertexInfo (Ext Unknown) w s):is)) =
+      let vt = vectorType is
+          a' = if vt `member` snd xss then
+                  case length (filter ((Ext Pi==) . angle) iss) of
+                    0 -> Pi
+                    1 -> Zero
+                    _ -> error "Impossible: Multiple π angles!"
+                else if vt `member` fst xss then Zero
+                else Unknown
+      in (VertexInfo (Ext a') w s):is
+    completeVertex iss = iss
 
 -- Assumes all possible completions performed.
 -- Assumptions:
