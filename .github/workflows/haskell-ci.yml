@@ -16,7 +16,9 @@ jobs:
 
     - name: Setup Haskell
       uses: mstksg/setup-stack@v2
-      
+      env:
+        ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+
     - name: Cache dependencies
       uses: actions/cache@v1
       with:
