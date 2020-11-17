@@ -15,8 +15,8 @@ type ConvexPolytopeProps = {
 }
 
 const ConvexPolytope: FC<ConvexPolytopeProps> = ({ cp }) => {
-  const eqs = cp.ass.hps.reverse().map((eq) => equationTeX(eq, '='))
-  const ineqs = cp.cs.reverse().map((ineq) => equationTeX(ineq, '<'))
+  const eqs = cp.ass.hps.map((eq) => equationTeX(eq, '='))
+  const ineqs = cp.cs.map((ineq) => equationTeX(ineq, '<'))
   const lines = [...eqs, ...ineqs]
   const math = `\\begin{aligned} ${lines.join('\\\\')} \\end{aligned}`
   return <TeX block math={math} />
@@ -31,9 +31,26 @@ const scaleEquation = ({ t, c }: Equation): ScaledEquation => {
   }
 }
 
+const sideName = (sideNumber: number): string => {
+  switch (sideNumber) {
+    case 1:
+      return 'a'
+    case 2:
+      return 'b'
+    case 3:
+      return 'c'
+    case 4:
+      return 'd'
+    case 5:
+      return 'e'
+    default:
+      throw Error('Invalid side number.')
+  }
+}
+
 const equationTeX = (equation: Equation, relation: Ord): string => {
   const { t, c } = scaleEquation(equation)
-  const allTerms: Term[] = t.map((v, i) => term(v, `l_{${i + 1}}`))
+  const allTerms: Term[] = t.map((v, i) => term(v, sideName(i + 1)))
   const includedTerms = allTerms.filter(({ v }) => v !== 0)
   const lhs = includedTerms.filter(({ isNegative }) => !isNegative)
   const rhs = includedTerms.filter(({ isNegative }) => isNegative)
