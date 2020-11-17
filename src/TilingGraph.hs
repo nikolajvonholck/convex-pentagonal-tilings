@@ -11,6 +11,7 @@ import Utils ((!), zipPedantic)
 import JSON
 
 import Data.List (genericLength)
+import qualified Data.Set as Set
 import Data.Set (member, elems)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, insert, delete, fromList)
@@ -85,14 +86,6 @@ isVertexComplete _ = True
 vectorType :: [VertexInfo] -> VectorType
 vectorType is = [genericLength $ filter ((Int a==) . angle) is | a <- interiorAngles]
 
-correctedVectorType :: [VertexInfo] -> VectorType
-correctedVectorType is =
-  let c = if isVertexHalf is then 2 else 1
-  in c |*| vectorType is
-
-isVertexHalf :: [VertexInfo] -> Bool
-isVertexHalf = any ((Ext Pi==) . angle)
-
 vertexInfoList :: TilingGraph -> Vertex -> [VertexInfo]
 vertexInfoList g v = case Map.lookup v g of
   Just info -> info
@@ -112,21 +105,24 @@ vertexInfoAfter g v i = helper $ wrappedVertexInfoList g v
 lengthType :: [Side] -> Vector Integer
 lengthType ss = [genericLength $ filter (s==) ss | s <- sides]
 
-isVertexValidHalfVertex :: VectorTypeSet -> [VertexInfo] -> Bool
-isVertexValidHalfVertex xs is =
-  let numPIs = length (filter ((Ext Pi==) . angle) is)
-      cvt = 2 |*| vectorType is
+isVertexValidHalfVertex :: (VectorTypeSet, VectorTypeSet) -> [VertexInfo] -> Bool
+isVertexValidHalfVertex (_, xs) is =
+  let vt = vectorType is
   in if isVertexComplete is
-    then numPIs == 1 && cvt `member` xs
-    else numPIs == 0 && (any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs)
+    then vt `member` xs
+    else any (\x -> all (\(v, w) -> v <= w) $ zip vt x) xs
 
-isVertexValid :: VectorTypeSet -> [VertexInfo] -> Bool
-isVertexValid xs is =
-  length (filter ((Ext Pi==) . angle) is) <= 1 &&
-    let cvt = correctedVectorType is
-    in if isVertexComplete is
-      then cvt `member` xs
-      else any (\x -> all (\(v, w) -> v <= w) $ zip cvt x) xs
+isVertexValid :: (VectorTypeSet, VectorTypeSet) -> [VertexInfo] -> Bool
+isVertexValid xss is =
+  let pis = length (filter ((Ext Pi==) . angle) is)
+      vt = vectorType is
+      xs = case pis of
+        0 -> fst xss
+        1 -> snd xss
+        _ -> error "Impossible: Multiple π angles!"
+  in if isVertexComplete is
+    then vt `member` xs
+    else any (\x -> all (\(v, w) -> v <= w) $ zip vt x) xs
 
 -- Runs counterclockwise in the sense that:
 --  - Outermost vertex is clockwise end.
@@ -198,8 +194,8 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
-completeRuns :: VectorTypeSet -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
-completeRuns xs (g, lp) = completeRuns' $ exteriorRuns g
+completeRuns :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
+completeRuns xss (g, lp) = completeRuns' $ exteriorRuns g
   where
     completeRuns' :: [Run] -> [(TilingGraph, ConvexPolytope Rational)]
     completeRuns' [] = [(g, lp)]
@@ -212,55 +208,61 @@ completeRuns xs (g, lp) = completeRuns' $ exteriorRuns g
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
             (Just _, Nothing, Nothing) ->
               do
-                guard $ isVertexValidHalfVertex xs (vertexInfoList g x)
+                guard $ isVertexValidHalfVertex xss (vertexInfoList g x)
                 completeRuns' rs
-            (Nothing, Just _, Nothing) -> mergeVertices xs (g, lp) x y Zero
+            (Nothing, Just _, Nothing) -> mergeVertices xss (g, lp) x y Zero
             (Nothing, Nothing, Just _) ->
               do
-                guard $ isVertexValidHalfVertex xs (vertexInfoList g y)
+                guard $ isVertexValidHalfVertex xss (vertexInfoList g y)
                 completeRuns' rs
             (lpleq, lpeq, lpgeq) -> -- Decide run.
               case sequence [lpleq, lpeq, lpgeq] of
                 Nothing -> error "Impossible: There should always be an option"
-                Just lps' -> do lp' <- lps'; completeRuns xs (g, lp')
+                Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
         [la, lb, lc] ->
           let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0)) of
             (Just _, Nothing) ->
               do
-                guard $ isVertexValidHalfVertex xs (vertexInfoList g x)
-                guard $ isVertexValidHalfVertex xs (vertexInfoList g y)
+                guard $ isVertexValidHalfVertex xss (vertexInfoList g x)
+                guard $ isVertexValidHalfVertex xss (vertexInfoList g y)
                 completeRuns' rs
-            (Nothing, Just _) -> mergeVertices xs (g, lp) x y Pi
+            (Nothing, Just _) -> mergeVertices xss (g, lp) x y Pi
             (lpleq, lpeq) -> -- Decide run.
               case sequence [lpleq, lpeq] of
                 Nothing -> [] -- Backtrack: Violation of triangle inequality.
-                Just lps' -> do lp' <- lps'; completeRuns xs (g, lp')
+                Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
         _ -> [] -- Backtrack: Invalid run.
 
 -- There might be completable runs in input graph.
-completeVertices :: VectorTypeSet -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
-completeVertices xs (g, lp) =
+completeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
+completeVertices xss (g, lp) =
   let g' = Map.map completeVertex g
-  in completeRuns xs (g', lp)
+  in completeRuns xss (g', lp)
   where
     -- Returns completed vertex info list if the vertex can be completed.
     -- Return Nothing if vertex is already complete or if can not be completed.
     completeVertex :: [VertexInfo] -> [VertexInfo]
     completeVertex iss =
-      case iss of
+      let pis = length (filter ((Ext Pi==) . angle) iss)
+      in case iss of
         ((VertexInfo (Ext Unknown) v s):is) ->
-            let a = if 2 |*| vectorType is `member` xs then Pi else
-                    if correctedVectorType is `member` xs then Zero
+            let vt = vectorType is
+                a = if vt `member` snd xss then
+                      case pis of
+                        0 -> Pi
+                        1 -> Zero
+                        _ -> error "Impossible: Multiple π angles!"
+                    else if vt `member` fst xss then Zero
                     else Unknown
             in (VertexInfo (Ext a) v s):is
         _ -> iss
 
-mergeVertices :: VectorTypeSet -> (TilingGraph, ConvexPolytope Rational) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
-mergeVertices xs (g, lp) v v' a =
+mergeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
+mergeVertices xss (g, lp) v v' a =
   case mergeTwoVertices of
     Nothing -> []
-    Just g' -> completeVertices xs (g', lp) -- Note if v'' can be completed, it will happen inside of here.
+    Just g' -> completeVertices xss (g', lp) -- Note if v'' can be completed, it will happen inside of here.
   where
     -- v is first in run, v' is last (counterclockwise rotation/run around graph)
     -- vertex (min v v') is kept, while (max v v') is discarded.
@@ -272,7 +274,7 @@ mergeVertices xs (g, lp) v v' a =
               ((VertexInfo (Ext Unknown) w' s'):is') ++ ((VertexInfo (Ext a) w s):is)
             _ -> error "Merging vertices must be incomplete."
       in do
-        guard $ isVertexValid xs iss -- Abandon early if merged vertex can never be completed.
+        guard $ isVertexValid xss iss -- Abandon early if merged vertex can never be completed.
         let g' = insert v'' iss $ delete vOut g
         -- TODO: Consider assert that i' does not mention v or v'. (it should not be 'outdated')
         -- TODO: also consider-ish: when (i' `notElem` info) (error "i' was changed during merge.")
@@ -284,8 +286,8 @@ mergeVertices xs (g, lp) v v' a =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exteriror (pi/empty) angles.
-backtrack :: PolygonConstructor -> Vector Rational -> VectorTypeSet -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
-backtrack constructor alpha xs g lp =
+backtrack :: PolygonConstructor -> Vector Rational -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
+backtrack constructor alpha xss g lp =
   -- Conclusion: We will have to add another tile.
   do
     let maxVertexId = fst $ Map.findMax g -- initial 5.
@@ -307,12 +309,17 @@ backtrack constructor alpha xs g lp =
     corner <- interiorAngles
     let cornerVertexId = fst $ fromJust $ minWhere (\(_, is) -> any (\i -> angle i == Int corner) is) anotherTile
     -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
-    (g', lp') <- mergeVertices xs (disconnectedGraph, lp) cornerVertexId incompleteVertex Zero
+    (g', lp') <- mergeVertices xss (disconnectedGraph, lp) cornerVertexId incompleteVertex Zero
     -- All possible completions will be handled inside 'mergeVertices'.
     let construction = constructor lp'
     guard $ lp == lp' || isJust construction
     let lengths = approximateLengths $ fromJust construction
-    (g', lp', lengths) : backtrack constructor alpha xs (traceShow ("choice:", incompleteVertex) g') lp'
+    (g', lp', lengths) : backtrack constructor alpha xss (traceShow ("choice:", incompleteVertex) g') lp'
+
+halfVertexTypes :: VectorTypeSet -> VectorTypeSet
+halfVertexTypes xs =
+  let withEvenValues = Set.filter (\x -> all (\v -> v `mod` 2 == 0) x) xs
+  in Set.map (\x -> [v `div` 2 | v <- x]) withEvenValues
 
 exhaustiveSearch :: VectorTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope Rational, Vector Rational)])
 exhaustiveSearch xs alpha =
@@ -332,9 +339,10 @@ exhaustiveSearch xs alpha =
             constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
             constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
           ] -- (0, 1)^5
+      xss = (xs, halfVertexTypes xs)
   in case traceShow (xs, alpha, s) lp of
     Nothing -> []
-    Just lp' -> backtrack constructor alpha xs g lp'
+    Just lp' -> backtrack constructor alpha xss g lp'
 
 type PolygonConstructor = ConvexPolytope Rational -> Maybe (ConvexPolytope AlgebraicNumber)
 
