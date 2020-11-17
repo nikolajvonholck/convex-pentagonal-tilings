@@ -263,6 +263,20 @@ mergeVertices xss (g, lp) v v' a =
       in (VertexInfo (Ext a') w s):is
     completeVertex iss = iss
 
+pickIncompleteVertex :: TilingGraph -> Vertex
+pickIncompleteVertex g =
+  let weightedIncompleteVertices =
+        [(v, v) | v <- Map.keys $ Map.filter (not . isVertexComplete) g] ++
+        [(v, weight) | run <- exteriorRuns g,
+                       let bends = runBends run,
+                       length bends == 2,
+                       let weight = leastVertexAlongRun run,
+                       let (x, y) = runEnds run,
+                       v <- [x, y],
+                       not (isVertexComplete (vertexInfoList g v))]
+      leastWeight = minimum [w | (_, w) <- weightedIncompleteVertices]
+  in minimum [v | (v, w) <- weightedIncompleteVertices, w == leastWeight]
+
 -- Assumes all possible completions performed.
 -- Assumptions:
 --  • lp is non-empty (this is ensured by type system and ConvexPolytope impl)
@@ -271,21 +285,9 @@ mergeVertices xss (g, lp) v v' a =
 --  • There are no unchecked exteriror (pi/empty) angles.
 backtrack :: PolygonConstructor -> Vector Rational -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
 backtrack constructor alpha xss g lp =
-  -- Conclusion: We will have to add another tile.
-  do
+  do -- Situation: We will have to add another tile.
+    let incompleteVertex = pickIncompleteVertex g
     let maxVertexId = fst $ Map.findMax g -- initial 5.
-    let defaultWeights = [(v, v) | v <- Map.keys $ Map.filter (not . isVertexComplete) g]
-    let twoBendWeights = [(v, weight) |
-          run <- exteriorRuns g,
-          let bends = runBends run,
-          length bends == 2,
-          let weight = leastVertexAlongRun run,
-          let (x, y) = runEnds run,
-          v <- [x, y],
-          not (isVertexComplete (vertexInfoList g v))]
-    let weights = defaultWeights ++ twoBendWeights
-    let leastWeight = minimum [w | (_, w) <- weights]
-    let incompleteVertex = minimum [v | (v, w) <- weights, w == leastWeight]
     orientation <- orientations -- Pick direction of new pentagon.
     let anotherTile = pentagonGraph maxVertexId orientation
     let disconnectedGraph = Map.unionWith (\_ _ -> error "Key clash!") g anotherTile
@@ -295,7 +297,7 @@ backtrack constructor alpha xss g lp =
     (g', lp') <- mergeVertices xss (disconnectedGraph, lp) cornerVertexId incompleteVertex Zero
     -- All possible completions will be handled inside 'mergeVertices'.
     let construction = constructor lp'
-    guard $ lp == lp' || isJust construction
+    guard $ isJust construction
     let lengths = approximateLengths $ fromJust construction
     (g', lp', lengths) : backtrack constructor alpha xss (traceShow ("choice:", incompleteVertex) g') lp'
 
