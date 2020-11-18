@@ -6,7 +6,7 @@ import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
 import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, fromRationalConvexPolytope)
 import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
 import ChebyshevPolynomial (commonDenominator, cosineFieldExtension, sinePoly, cosinePoly)
-import Data.List (genericTake)
+import Utils ((!))
 import JSON
 
 import Data.List (genericLength)
@@ -15,7 +15,7 @@ import Data.Set (member, elems)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, insert, delete, fromList)
 import Data.Maybe (fromJust, isJust)
-import Data.List (find)
+import Data.List (find, genericTake)
 import Control.Monad (guard, foldM)
 
 import Debug.Trace (traceShow)
@@ -32,29 +32,6 @@ asRational = map fromInteger
 
 orientations :: [Orientation]
 orientations = [CounterClockwise, ClockWise]
-
-oneMod :: Integer -> Integer -> Integer
-n `oneMod` k = ((n - 1) `mod` k) + 1
-
-toAngle :: Integer -> InteriorAngle
-toAngle n =
-  case n `oneMod` 5 of
-    1 -> AngleA
-    2 -> AngleB
-    3 -> AngleC
-    4 -> AngleD
-    5 -> AngleE
-    _ -> error "Impossible."
-
-toLength :: Integer -> Length
-toLength n =
-  case n `oneMod` 5 of
-    1 -> LengthA
-    2 -> LengthB
-    3 -> LengthC
-    4 -> LengthD
-    5 -> LengthE
-    _ -> error "Impossible."
 
 -- A corner of a pentagon is represented by giving the exterior angle, then the
 -- length to the first vertex, then the interior angle and lastly the length to
@@ -332,17 +309,24 @@ constructPolygon :: [HyperPlane AlgebraicNumber] -> PolygonConstructor
 constructPolygon cs lp =
   foldM projectOntoHyperplane (fromRationalConvexPolytope lp) cs
 
--- TODO: Consider defining the two pentagons (in each direction) and using a map to offset vertex ids.
 pentagonGraph :: Vertex -> Orientation -> TilingGraph
-pentagonGraph vOffset orientation =
-  let before n = (n - 1) `oneMod` 5
-      after  n = (n + 1) `oneMod` 5
-      makeCorners n = case orientation of
-        CounterClockwise ->
-          [Corner Unknown (toLength n, vOffset + after n) (toAngle n) (toLength (before n), vOffset + before n)]
-        ClockWise ->
-          [Corner Unknown (toLength (before n), vOffset + before n) (toAngle n) (toLength n, vOffset + after n)]
-  in fromList [(vOffset + i, makeCorners i) | i <- [1..5]]
+pentagonGraph w orientation =
+  fromList [(i + w, offsetCorner <$> corner i) | i <- [1..5]]
+  where
+    prev :: Integer -> Integer
+    prev n = if n == 1 then 5 else n - 1
+    next :: Integer -> Integer
+    next n = if n == 5 then 1 else n + 1
+    toAngle :: Integer -> InteriorAngle
+    toAngle n = interiorAngles ! n
+    toLength :: Integer -> Length
+    toLength n = lengths ! n
+    corner :: Integer -> [Corner]
+    corner n = case orientation of
+      CounterClockwise -> [Corner Unknown (toLength n, next n) (toAngle n) (toLength (prev n), prev n)]
+      ClockWise -> [Corner Unknown (toLength (prev n), prev n) (toAngle n) (toLength n, next n)]
+    offsetCorner :: Corner -> Corner
+    offsetCorner (Corner ea (l1, v1) ia (l2, v2)) = (Corner ea (l1, v1 + w) ia (l2, v2 + w))
 
 angleSum :: Vector Rational -> Vector Rational -- TODO: Check tail-part
 angleSum as = [fromInteger i - 1 - (sum $ genericTake (i - 1) (tail as)) | i <- [1..5]]
