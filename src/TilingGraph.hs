@@ -296,8 +296,8 @@ backtrack constructor alpha xss g lp =
     -- All possible completions will be handled inside 'mergeVertices'.
     let construction = constructor lp'
     guard $ isJust construction
-    let lengths = approximateLengths $ fromJust construction
-    (g', lp', lengths) : backtrack constructor alpha xss (traceShow ("choice:", incompleteVertex) g') lp'
+    let ls = approximateLengths $ fromJust construction
+    (g', lp', ls) : backtrack constructor alpha xss (traceShow ("choice:", incompleteVertex) g') lp'
 
 halfVertexTypes :: VectorTypeSet -> VectorTypeSet
 halfVertexTypes xs =
@@ -367,11 +367,11 @@ approximateLengths lp =
   in map (approximate 0.001) $ (1 / (fromInteger $ genericLength lengthsExtr)) |*| (foldl (|+|) (zero 5) lengthsExtr)
 
 planarize :: Vector Rational -> Vector Rational -> TilingGraph -> Map Vertex VertexWithLocation
-planarize alpha lengths g =
+planarize alpha ls g =
   helper $ Map.fromList [(1, VWL 0 0 (vertexInfoList g 1)), (2, VWL (lengthNum approxLengths LengthA) 0 (vertexInfoList g 2))]
   where
     approxAlpha = map fromRational alpha
-    approxLengths = map fromRational lengths
+    approxLengths = map fromRational ls
     helper :: Map Vertex VertexWithLocation -> Map Vertex VertexWithLocation
     helper gl =
       let vWithL = Map.keys gl
@@ -414,12 +414,12 @@ angleNum _ (Ext a) = case a of
     Pi -> 1
 
 lengthNum :: Vector Double -> Length -> Double
-lengthNum lengths s = case s of
-    LengthA -> lengths ! 1
-    LengthB -> lengths ! 2
-    LengthC -> lengths ! 3
-    LengthD -> lengths ! 4
-    LengthE -> lengths ! 5
+lengthNum ls s = case s of
+    LengthA -> ls ! 1
+    LengthB -> ls ! 2
+    LengthC -> ls ! 3
+    LengthD -> ls ! 4
+    LengthE -> ls ! 5
 
 calcAngles :: Vector Double -> [VertexInfo] -> [Double]
 calcAngles alpha is = tail $ scanl (\acc i -> acc + angleNum alpha (angle i)) 0 is
