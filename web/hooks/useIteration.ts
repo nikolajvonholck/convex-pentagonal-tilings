@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
 
+type Response = {
+  graph: TilingGraph
+  lp: ConvexPolytope
+  angles: number[]
+  lengths: number[]
+}
+
 const useIteration = (
   goodSubsetId: number,
   iteration: number
-): [
-  { graph: TilingGraph; convexPolytope: ConvexPolytope } | undefined,
-  boolean,
-  Error | undefined
-] => {
-  const [graph, setGraph] = useState<TilingGraph | undefined>(undefined)
-  const [convexPolytope, setConvexPolytope] = useState<
-    ConvexPolytope | undefined
-  >(undefined)
+): [Response | undefined, boolean, Error | undefined] => {
+  const [response, setResponse] = useState<Response | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | undefined>(undefined)
 
@@ -26,8 +26,7 @@ const useIteration = (
         )
         const json = await response.json()
         if (!ignore) {
-          setGraph(json.graph as any)
-          setConvexPolytope(json.lp as any)
+          setResponse(json as Response)
         }
       } catch (error) {
         if (!ignore) {
@@ -44,9 +43,7 @@ const useIteration = (
     }
   }, [goodSubsetId, iteration])
 
-  const res = graph && convexPolytope ? { graph, convexPolytope } : undefined
-
-  return [res, isLoading, error]
+  return [response, isLoading, error]
 }
 
 export default useIteration

@@ -1,7 +1,11 @@
 import React, { FC } from 'react'
 import styles from '../styles/graph.module.css'
 
-type VertexProps = Omit<Vertex, 'edges'>
+type VertexProps = {
+  x: number
+  y: number
+  v: string
+}
 
 const Vertex: FC<VertexProps> = ({ x, y, v }) => (
   <g>

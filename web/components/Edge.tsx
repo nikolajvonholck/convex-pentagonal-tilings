@@ -2,8 +2,8 @@ import React, { FC } from 'react'
 import styles from '../styles/graph.module.css'
 
 type EdgeProps = {
-  v1: Vertex
-  v2: Vertex
+  v1: VertexWithLocation
+  v2: VertexWithLocation
 }
 
 const Edge: FC<EdgeProps> = ({

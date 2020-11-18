@@ -1,17 +1,27 @@
+type Length = 'a' | 'b' | 'c' | 'd' | 'e'
+type InteriorAngle = 'A' | 'B' | 'C' | 'D' | 'E'
+type ExteriorAngle = '?' | '0' | 'Pi'
+type Angle = InteriorAngle | ExteriorAngle
+
 type Vertex = {
+  edges: EdgeInfo[]
+}
+
+type VertexWithLocation = {
   x: number
   y: number
-  v: string
   edges: EdgeInfo[]
 }
 
 type EdgeInfo = {
-  a: string
+  a: Angle
+  l: Length
   v: string
-  s: string
 }
 
-type TilingGraph = Record<string, Vertex>
+type TilingGraph = Record<string, EdgeInfo[]>
+
+type TilingGraphWithLocations = Record<string, VertexWithLocation>
 
 type Rational = {
   p: number

@@ -13,10 +13,7 @@ const Home: NextPage = () => {
   const goodSubsetId = parseInt(goodSubset as string)
   const iteration = parseInt(frame as string)
 
-  const [result, isLoading, error] = useIteration(goodSubsetId, iteration)
-  const graph = result?.graph
-  const convexPolytope = result?.convexPolytope
-
+  const [response, isLoading, error] = useIteration(goodSubsetId, iteration)
   const goToIteration = (iteration) =>
     router.push(`/${goodSubsetId}/${iteration}`)
 
@@ -48,10 +45,16 @@ const Home: NextPage = () => {
           </div>
         )}
         <div className={styles.section}>Length constraints</div>
-        {convexPolytope && <ConvexPolytope cp={convexPolytope} />}
+        {response && <ConvexPolytope cp={response.lp} />}
       </div>
       <div className={styles.graphContainer}>
-        {graph && <Graph graph={graph} />}
+        {response && (
+          <Graph
+            graph={response.graph}
+            lengths={response.lengths}
+            angles={response.angles}
+          />
+        )}
       </div>
     </div>
   )

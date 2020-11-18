@@ -14,7 +14,7 @@ import Text.Read (readMaybe)
 import GoodSubsets (VectorTypeSet, recurse, inflate, permutations, rotationsAndReflections)
 import Data.Set (Set, empty, elems, singleton, (\\), size, toList, fromList, unions, member, union)
 import qualified Data.Set as Set
-import TilingGraph (TilingGraph, exhaustiveSearch, planarize)
+import TilingGraph (TilingGraph, exhaustiveSearch)
 import Utils (enumerate)
 import Vector (Vector)
 import JSON
@@ -98,8 +98,12 @@ makeResponder lists i k =
   case lists !? i of
     Nothing -> "Good subset not found: " ++ show i
     Just (alpha, backtracks) ->
-      let (g, lp, lengths) = backtracks `genericIndex` k
+      let (g, lp, ls) = backtracks `genericIndex` k
+          approxAlpha = map fromRational alpha :: [Double]
+          approxLengths = map fromRational ls :: [Double]
       in jsonObject [
-        ("graph", toJSON (planarize alpha lengths g)),
-        ("lp", toJSON lp)
+        ("graph", toJSON g),
+        ("lp", toJSON lp),
+        ("lengths", toJSON approxLengths),
+        ("angles", toJSON approxAlpha)
       ]

@@ -10,7 +10,7 @@ type AngleProps = {
   a: Point
   b: Point
   c: Point
-  angle: string
+  angle: Angle
 }
 
 const colors = [
@@ -22,19 +22,19 @@ const colors = [
   'rgb(138, 40, 143)' // Violet
 ]
 
-const angleColor = (angle: string) => {
+const angleColor = (angle: Angle) => {
   switch (angle) {
-    case '1':
+    case 'A':
       return colors[0]
-    case '2':
+    case 'B':
       return colors[1]
-    case '3':
+    case 'C':
       return colors[2]
-    case '4':
+    case 'D':
       return colors[3]
-    case '5':
+    case 'E':
       return colors[4]
-    case 'pi':
+    case 'Pi':
       return colors[5]
     default:
       return 'black'
@@ -74,7 +74,7 @@ const Angle: FC<AngleProps> = ({
         vectorEffect='non-scaling-stroke'
         className={styles.angleLabel}
       >
-        {angle === 'pi' ? 'π' : angle}
+        {angle === 'Pi' ? 'π' : angle}
       </text>
     </g>
   )
