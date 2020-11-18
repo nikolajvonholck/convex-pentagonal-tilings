@@ -13,13 +13,22 @@ type VertexWithLocation = {
   edges: EdgeInfo[]
 }
 
+type Corner = {
+  ea: ExteriorAngle
+  l1: Length
+  v1: string
+  ia: InteriorAngle
+  l2: Length
+  v2: string
+}
+
 type EdgeInfo = {
   a: Angle
   l: Length
   v: string
 }
 
-type TilingGraph = Record<string, EdgeInfo[]>
+type TilingGraph = Record<string, Corner[]>
 
 type TilingGraphWithLocations = Record<string, VertexWithLocation>
 
@@ -46,7 +55,7 @@ type ScaledEquation = {
   c: number
 }
 
-type ConvexPolytope = {
+type LinearProgram = {
   ass: AffineSubspace
   cs: Equation[]
 }

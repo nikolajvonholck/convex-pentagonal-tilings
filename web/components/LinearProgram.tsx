@@ -10,13 +10,13 @@ type Term = {
 
 type Ord = '<' | '='
 
-type ConvexPolytopeProps = {
-  cp: ConvexPolytope
+type LinearProgramProps = {
+  linearProgram: LinearProgram
 }
 
-const ConvexPolytope: FC<ConvexPolytopeProps> = ({ cp }) => {
-  const eqs = cp.ass.hps.map((eq) => equationTeX(eq, '='))
-  const ineqs = cp.cs.map((ineq) => equationTeX(ineq, '<'))
+const LinearProgram: FC<LinearProgramProps> = ({ linearProgram }) => {
+  const eqs = linearProgram.ass.hps.map((eq) => equationTeX(eq, '='))
+  const ineqs = linearProgram.cs.map((ineq) => equationTeX(ineq, '<'))
   const lines = [...eqs, ...ineqs]
   const math = `\\begin{aligned} ${lines.join('\\\\')} \\end{aligned}`
   return <TeX block math={math} />
@@ -91,4 +91,4 @@ const gcd = (a: number, b: number): number => (!b ? a : gcd(b, a % b))
 
 const lcm = (a: number, b: number): number => a * (b / gcd(a, b))
 
-export default ConvexPolytope
+export default LinearProgram

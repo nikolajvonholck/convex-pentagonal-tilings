@@ -4,7 +4,7 @@ import { useRouter } from 'next/router'
 import styles from '../../styles/ui.module.css'
 import { NextPage } from 'next'
 import Graph from '../../components/Graph'
-import ConvexPolytope from '../../components/ConvexPolytope'
+import LinearProgram from '../../components/LinearProgram'
 import useIteration from '../../hooks/useIteration'
 
 const Home: NextPage = () => {
@@ -45,7 +45,7 @@ const Home: NextPage = () => {
           </div>
         )}
         <div className={styles.section}>Length constraints</div>
-        {response && <ConvexPolytope cp={response.lp} />}
+        {response && <LinearProgram linearProgram={response.linearProgram} />}
       </div>
       <div className={styles.graphContainer}>
         {response && (

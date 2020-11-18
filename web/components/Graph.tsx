@@ -49,7 +49,7 @@ const edgeToNeighbourWithLocation = (
 }
 
 const nextVertexToAddLocation = (
-  graph: TilingGraph,
+  graph: Record<string, EdgeInfo[]>,
   gl: TilingGraphWithLocations,
   verticesWithoutLocation: string[]
 ): string | undefined => {
@@ -61,7 +61,7 @@ const nextVertexToAddLocation = (
 }
 
 const planarize = (
-  graph: TilingGraph,
+  graph: Record<string, EdgeInfo[]>,
   angles: number[],
   lengths: number[],
   gl: TilingGraphWithLocations
@@ -141,12 +141,24 @@ const getAngle = (angles: number[], angle: Angle): number => {
   }
 }
 
+const edgesFromCorner = ({ ea, l1, v1, ia, l2, v2 }: Corner): EdgeInfo[] => [
+  { a: ea, l: l1, v: v1 },
+  { a: ia, l: l2, v: v2 }
+]
+
+const getIntermediateGraph = (graph: TilingGraph): Record<string, EdgeInfo[]> =>
+  Object.fromEntries(
+    Object.entries(graph).map(([k, v]) => [
+      k,
+      [].concat(...v.map(edgesFromCorner))
+    ])
+  )
+
 const Graph: FC<GraphProps> = ({ graph: g, angles, lengths }) => {
-  const graph = useMemo(() => planarize(g, angles, lengths, {}), [
-    g,
-    angles,
-    lengths
-  ])
+  const graph = useMemo(
+    () => planarize(getIntermediateGraph(g), angles, lengths, {}),
+    [g, angles, lengths]
+  )
 
   const viewBox = makeViewBox(graph)
   const entries = Object.entries(graph)

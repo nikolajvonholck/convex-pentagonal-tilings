@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 
 type Response = {
   graph: TilingGraph
-  lp: ConvexPolytope
+  linearProgram: LinearProgram
   angles: number[]
   lengths: number[]
 }

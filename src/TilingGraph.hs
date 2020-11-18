@@ -56,7 +56,9 @@ toLength n =
     5 -> LengthE
     _ -> error "Impossible."
 
--- TODO: Documentation.
+-- A corner of a pentagon is represented by giving the exterior angle, then the
+-- length to the first vertex, then the interior angle and lastly the length to
+-- the second vertex, all listed in counterclockwise rotation around the corner.
 data Corner = Corner ExteriorAngle (Length, Vertex) InteriorAngle (Length, Vertex) deriving (Show, Eq)
 interiorAngle :: Corner -> InteriorAngle
 interiorAngle (Corner _ _ ia _) = ia
@@ -69,9 +71,9 @@ lengths = [LengthA, LengthB, LengthC, LengthD, LengthE]
 interiorAngles :: [InteriorAngle]
 interiorAngles = [AngleA, AngleB, AngleC, AngleD, AngleE]
 
--- Map from Vertex to edges with sattelite info: edge comes after angle in counterclockwise rotation around vertex.
--- Maintained invariants:
---   • Each vertex has at most one unknown angle and it must be the first angle.
+-- Map from Vertex to list of pentagon corners listed in counterclockwise
+-- rotation around the vertex. We maintain the invariant that a vertex has at
+-- most one unknown exterior angle and it must be the first angle.
 type TilingGraph = Map Vertex [Corner]
 
 isVertexComplete :: [Corner] -> Bool
@@ -82,21 +84,20 @@ vectorType :: [Corner] -> VectorType
 vectorType cs = [genericLength $ filter (\c -> interiorAngle c == a) cs | a <- interiorAngles]
 
 cornerList :: TilingGraph -> Vertex -> [Corner]
-cornerList g v = case Map.lookup v g of
-  Just cs -> cs
-  Nothing -> error "Could not find vertex in graph."
+cornerList g v = fromJust $ Map.lookup v g
 
 wrappedCornerList :: TilingGraph -> Vertex -> [Corner]
 wrappedCornerList g v = let cs = cornerList g v in cs ++ [head cs]
 
--- after is measured wrt. counterclockwise rotation around v.
+-- The corner after the given corner is found by counterclockwise rotation
+-- around the given vertex.
 cornerAfter :: TilingGraph -> Vertex -> Corner -> Corner
 cornerAfter g v i = helper $ wrappedCornerList g v
   where
     helper (x:y:zs) = if x == i then y else helper (y:zs)
     helper _ = error "Could not find corner after given corner."
 
--- Counts the number of each length along the given run.
+-- Counts the number of each length.
 lengthCounts :: [Length] -> Vector Integer
 lengthCounts ll = [genericLength $ filter (l==) ll | l <- lengths]
 
@@ -158,7 +159,6 @@ exteriorRuns g =
       tour = R v Unknown (Just (Edge l (exteriorTour v v v')))
   in partitionTour tour
   where
-    -- Returns info about v' and its next length.
     exteriorTour :: Vertex -> Vertex -> Vertex -> Run
     exteriorTour vStart w w' =
       let c' = fromJust $ find (\(Corner _ _ _ (_, z)) -> z == w) $ cornerList g w' -- Edge from w' to w.
@@ -240,12 +240,13 @@ mergeVertices xss (g, lp) v v' a =
     let iss' = completeVertex iss
     let g' = Map.map (map $ renameVertex vDiscard vKeep) $ insert vKeep iss' $ delete vDiscard g
     completeRuns xss (g', lp) -- There might be completable runs.
-  where-- w == vDiscard, w' == vKeep
+  where
     renameVertex :: Vertex -> Vertex -> Corner -> Corner
     renameVertex w w' (Corner ea (s1, z1) ia (s2, z2)) =
       let swap z = if z == w then w' else z
       in Corner ea (s1, swap z1) ia (s2, swap z2)
-    -- Returns vertex info list, completed if possible.
+
+    -- Returns corner list, completed if possible.
     completeVertex :: [Corner] -> [Corner]
     completeVertex (css@((Corner Unknown e1 ia e2):is)) =
       let vt = vectorType css
@@ -278,7 +279,7 @@ pickIncompleteVertex g =
 --  • lp is non-empty (this is ensured by type system and ConvexPolytope impl)
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
---  • There are no unchecked exteriror (pi/empty) angles.
+--  • There are no unchecked exterior (pi/empty) angles.
 backtrack :: PolygonConstructor -> Vector Rational -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
 backtrack constructor alpha xss g lp =
   do -- Situation: We will have to add another tile.
@@ -355,19 +356,15 @@ approximateLengths lp =
   let lengthsExtr = elems $ extremePoints lp
   in map (approximate 0.001) $ (1 / (fromInteger $ genericLength lengthsExtr)) |*| (foldl (|+|) (zero 5) lengthsExtr)
 
--- TODO: Must be part of array as of now...
 instance JSON Corner where
   toJSON (Corner ea (l1, v1) ia (l2, v2)) =
     jsonObject [
-        ("a", toJSON ea),
-        ("l", toJSON l1),
-        ("v", show $ toJSON v1)
-      ]
-    ++ ", " ++
-    jsonObject [
-        ("a", toJSON ia),
-        ("l", toJSON l2),
-        ("v", show $ toJSON v2)
+        ("ea", toJSON ea),
+        ("l1", toJSON l1),
+        ("v1", show $ toJSON v1),
+        ("ia", toJSON ia),
+        ("l2", toJSON l2),
+        ("v2", show $ toJSON v2)
       ]
 
 instance JSON InteriorAngle where
