@@ -41,7 +41,9 @@ const edgeToNeighbourWithLocation = (
   edges: EdgeInfo[]
 ): EdgeInfo | undefined => {
   const vWithL = Object.keys(gl)
-  for (const edge of edges) {
+  // We pick the least vertex in order to improve floating point precision.
+  const sortedEdges = [...edges].sort((e1, e2) => (e1.v < e2.v ? 1 : -1))
+  for (const edge of sortedEdges) {
     if (vWithL.includes(edge.v)) {
       return edge
     }
