@@ -23,10 +23,10 @@ import Debug.Trace (traceShow)
 
 type Vertex = Integer
 
-data InteriorAngle = AOne | ATwo | AThree | AFour | AFive deriving (Show, Eq)
+data InteriorAngle = AngleA | AngleB | AngleC | AngleD | AngleE deriving (Show, Eq)
 data ExteriorAngle = Unknown | Zero | Pi deriving (Show, Eq)
 data Angle = Int InteriorAngle | Ext ExteriorAngle deriving (Show, Eq)
-data Side = EOne | ETwo | EThree | EFour | EFive deriving (Show, Eq)
+data Length = LengthA | LengthB | LengthC | LengthD | LengthE deriving (Show, Eq)
 
 data Orientation = CounterClockwise | ClockWise
 
@@ -42,36 +42,34 @@ n `oneMod` k = ((n - 1) `mod` k) + 1
 toAngle :: Integer -> Angle
 toAngle n =
   case n `oneMod` 5 of
-    1 -> Int AOne
-    2 -> Int ATwo
-    3 -> Int AThree
-    4 -> Int AFour
-    5 -> Int AFive
+    1 -> Int AngleA
+    2 -> Int AngleB
+    3 -> Int AngleC
+    4 -> Int AngleD
+    5 -> Int AngleE
     _ -> error "Impossible."
 
-toSide :: Integer -> Side
-toSide n =
+toLength :: Integer -> Length
+toLength n =
   case n `oneMod` 5 of
-    1 -> EOne
-    2 -> ETwo
-    3 -> EThree
-    4 -> EFour
-    5 -> EFive
+    1 -> LengthA
+    2 -> LengthB
+    3 -> LengthC
+    4 -> LengthD
+    5 -> LengthE
     _ -> error "Impossible."
 
-data VertexInfo = VertexInfo Angle Vertex Side deriving (Show, Eq)
+data VertexInfo = VertexInfo Angle Vertex Length deriving (Show, Eq)
 angle :: VertexInfo -> Angle
 angle (VertexInfo a _ _) = a
 vertex :: VertexInfo -> Vertex
 vertex (VertexInfo _ v _) = v
--- side :: VertexInfo -> Side
--- side (VertexInfo _ _ s) = s
 
-sides :: [Side]
-sides = [EOne, ETwo, EThree, EFour, EFive]
+lengths :: [Length]
+lengths = [LengthA, LengthB, LengthC, LengthD, LengthE]
 
 interiorAngles :: [InteriorAngle]
-interiorAngles = [AOne, ATwo, AThree, AFour, AFive]
+interiorAngles = [AngleA, AngleB, AngleC, AngleD, AngleE]
 
 -- Map from Vertex to edges with sattelite info: edge comes after angle in counterclockwise rotation around vertex.
 -- Maintained invariants:
@@ -102,8 +100,8 @@ vertexInfoAfter g v i = helper $ wrappedVertexInfoList g v
     helper _ = error "Could not find vertex info before."
 
 -- Counts the number of each length along the run.
-lengthType :: [Side] -> Vector Integer
-lengthType ss = [genericLength $ filter (s==) ss | s <- sides]
+lengthType :: [Length] -> Vector Integer
+lengthType ll = [genericLength $ filter (l==) ll | l <- lengths]
 
 isVertexValidHalfVertex :: (VectorTypeSet, VectorTypeSet) -> [VertexInfo] -> Bool
 isVertexValidHalfVertex (_, xs) is =
@@ -128,7 +126,7 @@ isVertexValid xss is =
 --  - Outermost vertex is clockwise end.
 --  - Innermost vertex is counterclockwise end.
 data Run = R Vertex ExteriorAngle (Maybe Edge) deriving (Show)
-data Edge = Edge Side Run deriving (Show)
+data Edge = Edge Length Run deriving (Show)
 
 -- (counterclockwise beginning, clockwise end)
 runEnds :: Run -> (Vertex, Vertex)
@@ -145,11 +143,11 @@ leastVertexAlongRun :: Run -> Vertex
 leastVertexAlongRun (R v _ Nothing) = v
 leastVertexAlongRun (R v _ (Just (Edge _ r))) = min v $ leastVertexAlongRun r
 
-runSides :: Run -> [[Side]]
-runSides (R _ a e) = case e of
+runLengths :: Run -> [[Length]]
+runLengths (R _ a e) = case e of
   Nothing -> [[]]
   Just (Edge s r) ->
-    case runSides r of
+    case runLengths r of
       [] -> error "Impossible."
       (p:ps) ->
         case a of
@@ -163,7 +161,7 @@ exteriorRuns g =
       tour = R v Unknown (Just (Edge s (exteriorTour v v v')))
   in partitionTour tour
   where
-    -- Returns info about v' and its next side.
+    -- Returns info about v' and its next length.
     exteriorTour :: Vertex -> Vertex -> Vertex -> Run
     exteriorTour vStart w w' = --(VertexInfo a'' w' _) =
       let i' = fromJust $ find ((w==) . vertex) $ vertexInfoList g w' -- Edge from w' to w.
@@ -201,7 +199,7 @@ completeRuns xss (g, lp) = completeRuns' $ exteriorRuns g
     completeRuns' [] = [(g, lp)]
     completeRuns' (r:rs) =
       let (x, y) = runEnds r
-      in case map lengthType $ runSides r of
+      in case map lengthType $ runLengths r of
         [_] -> completeRuns' rs -- No bends to check. Skip this run.
         [la, lb] ->
           let cs = asRational $ la |-| lb -- la < lb
@@ -342,12 +340,12 @@ pentagonGraph vOffset orientation =
       after  n = (n + 1) `oneMod` 5
       makeInfo n = case orientation of
         CounterClockwise -> [
-            VertexInfo (Ext Unknown) (vOffset + after n) (toSide n),
-            VertexInfo (toAngle n) (vOffset + before n) (toSide (before n))
+            VertexInfo (Ext Unknown) (vOffset + after n) (toLength n),
+            VertexInfo (toAngle n) (vOffset + before n) (toLength (before n))
           ]
         ClockWise -> [
-            VertexInfo (Ext Unknown) (vOffset + before n) (toSide (before n)),
-            VertexInfo (toAngle n) (vOffset + after n) (toSide n)
+            VertexInfo (Ext Unknown) (vOffset + before n) (toLength (before n)),
+            VertexInfo (toAngle n) (vOffset + after n) (toLength n)
           ]
   in fromList [(vOffset + i, makeInfo i) | i <- [1..5]]
 
@@ -370,7 +368,7 @@ approximateLengths lp =
 
 planarize :: Vector Rational -> Vector Rational -> TilingGraph -> Map Vertex VertexWithLocation
 planarize alpha lengths g =
-  helper $ Map.fromList [(1, VWL 0 0 (vertexInfoList g 1)), (2, VWL (lengthNum approxLengths EOne) 0 (vertexInfoList g 2))]
+  helper $ Map.fromList [(1, VWL 0 0 (vertexInfoList g 1)), (2, VWL (lengthNum approxLengths LengthA) 0 (vertexInfoList g 2))]
   where
     approxAlpha = map fromRational alpha
     approxLengths = map fromRational lengths
@@ -405,23 +403,23 @@ findNeighbourWithLocation gl is =
 
 angleNum :: Vector Double -> Angle -> Double
 angleNum alpha (Int a) = case a of
-    AOne -> alpha ! 1
-    ATwo -> alpha ! 2
-    AThree -> alpha ! 3
-    AFour -> alpha ! 4
-    AFive -> alpha ! 5
+    AngleA -> alpha ! 1
+    AngleB -> alpha ! 2
+    AngleC -> alpha ! 3
+    AngleD -> alpha ! 4
+    AngleE -> alpha ! 5
 angleNum _ (Ext a) = case a of
     Unknown -> 0
     Zero -> 0
     Pi -> 1
 
-lengthNum :: Vector Double -> Side -> Double
+lengthNum :: Vector Double -> Length -> Double
 lengthNum lengths s = case s of
-    EOne -> lengths ! 1
-    ETwo -> lengths ! 2
-    EThree -> lengths ! 3
-    EFour -> lengths ! 4
-    EFive -> lengths ! 5
+    LengthA -> lengths ! 1
+    LengthB -> lengths ! 2
+    LengthC -> lengths ! 3
+    LengthD -> lengths ! 4
+    LengthE -> lengths ! 5
 
 calcAngles :: Vector Double -> [VertexInfo] -> [Double]
 calcAngles alpha is = tail $ scanl (\acc i -> acc + angleNum alpha (angle i)) 0 is
@@ -447,20 +445,20 @@ instance JSON Angle where
   toJSON (Ext a) = show $ toJSON a
 
 instance JSON InteriorAngle where
-  toJSON AOne = "1"
-  toJSON ATwo = "2"
-  toJSON AThree = "3"
-  toJSON AFour = "4"
-  toJSON AFive = "5"
+  toJSON AngleA = "1"
+  toJSON AngleB = "2"
+  toJSON AngleC = "3"
+  toJSON AngleD = "4"
+  toJSON AngleE = "5"
 
 instance JSON ExteriorAngle where
   toJSON Unknown = "?"
   toJSON Zero = "0"
   toJSON Pi = "pi"
 
-instance JSON Side where
-  toJSON EOne = "1"
-  toJSON ETwo = "2"
-  toJSON EThree = "3"
-  toJSON EFour = "4"
-  toJSON EFive = "5"
+instance JSON Length where
+  toJSON LengthA = "1"
+  toJSON LengthB = "2"
+  toJSON LengthC = "3"
+  toJSON LengthD = "4"
+  toJSON LengthE = "5"
