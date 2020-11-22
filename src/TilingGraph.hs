@@ -323,13 +323,13 @@ pentagonGraph w orientation =
     toLength n = lengths ! n
     corner :: Integer -> [Corner]
     corner n = case orientation of
-      CounterClockwise -> [Corner Unknown (toLength n, next n) (toAngle n) (toLength (prev n), prev n)]
-      ClockWise -> [Corner Unknown (toLength (prev n), prev n) (toAngle n) (toLength n, next n)]
+      CounterClockwise -> [Corner Unknown (toLength (next n), next n) (toAngle n) (toLength n, prev n)]
+      ClockWise -> [Corner Unknown (toLength n, prev n) (toAngle n) (toLength (next n), next n)]
     offsetCorner :: Corner -> Corner
     offsetCorner (Corner ea (l1, v1) ia (l2, v2)) = (Corner ea (l1, v1 + w) ia (l2, v2 + w))
 
-angleSum :: Vector Rational -> Vector Rational -- TODO: Check tail-part
-angleSum as = [fromInteger i - 1 - (sum $ genericTake (i - 1) (tail as)) | i <- [1..5]]
+angleSum :: Vector Rational -> Vector Rational
+angleSum as = [fromInteger i - 1 - (sum $ genericTake (i - 1) as) | i <- [1..5]]
 
 -- Returns (k, v) for minimal key satisfying p.
 minWhere :: ((k, v) -> Bool) -> Map k v -> Maybe (k, v)

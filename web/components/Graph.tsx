@@ -86,7 +86,7 @@ const planarize = (
   if (!e1) {
     return planarize(graph, angles, lengths, {
       ...gl,
-      '2': { x: getLength(lengths, 'a'), y: 0, edges: graph['2'] } // We place second vertex to the right of first vertex.
+      '2': { x: getLength(lengths, 'b'), y: 0, edges: graph['2'] } // We place second vertex to the right of first vertex.
     })
   }
   const { v: w2 } = e1
