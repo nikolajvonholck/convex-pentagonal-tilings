@@ -10,8 +10,8 @@ import useIteration from '../../hooks/useIteration'
 const Home: NextPage = () => {
   const router = useRouter()
   const { goodSubset, frame } = router.query
-  const goodSubsetId = parseInt(goodSubset as string)
-  const iteration = parseInt(frame as string)
+  const goodSubsetId = +goodSubset
+  const iteration = +frame
 
   const [response, isLoading, error] = useIteration(goodSubsetId, iteration)
   const goToIteration = (iteration) =>
