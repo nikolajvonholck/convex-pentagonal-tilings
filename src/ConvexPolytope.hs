@@ -1,4 +1,4 @@
-module ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints, fromRationalConvexPolytope) where
+module ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints, fromRationalConvexPolytope, affineSubspace) where
 
 import Vector (Vector, zero, (|-|), (|*|), dot, isZero)
 import Matrix (rank)
@@ -24,6 +24,9 @@ data ConvexPolytope a = CP Strictness (AffineSubspace a) [(Constraint a, Constra
 instance Eq a => Eq (ConvexPolytope a) where
   (CP s ass _ extr) == (CP s' ass' _ extr') =
     (s, ass, extr) == (s', ass', extr')
+
+affineSubspace :: ConvexPolytope a -> AffineSubspace a
+affineSubspace (CP _ ass _ _) = ass
 
 constraint :: (Fractional a, Ord a) => Vector a -> a -> Constraint a
 constraint vs q =

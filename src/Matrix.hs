@@ -1,6 +1,6 @@
-module Matrix (Matrix, reducedEchelonForm, nullSpaceBasis, matrixVectorProduct, mRows, nCols, squareMatrix, rank) where
+module Matrix (Matrix, reducedEchelonForm, nullSpaceBasis, matrixVectorProduct, mRows, nCols, squareMatrix, rank, inSpan) where
 
-import Utils ((!), enumerate, findIndex, delta)
+import Utils ((!), enumerate, findIndex, delta, zipPedantic)
 import Vector (Vector, dimension, unit, (|*|), dot, isZero)
 
 import Data.List (transpose, find, (\\))
@@ -39,7 +39,7 @@ swapRows i j xss =
   in elemMatrix |.| xss
 
 rank :: (Fractional a, Eq a) => Matrix a -> Integer
-rank ms = mRows $ filter (not . isZero) $ reducedEchelonForm ms
+rank ms = mRows $ takeWhile (not . isZero) $ reducedEchelonForm ms
 
 reducedEchelonForm :: (Fractional a, Eq a) => Matrix a -> Matrix a
 reducedEchelonForm [] = []
@@ -81,3 +81,13 @@ nullSpaceBasis = makeBasis . reducedEchelonForm
         weave (False:_) _ [] = error "Impossible"
         weave (True:xs) (y:ys) zs  = y : weave xs ys zs
         weave (False:xs) ys (z:zs) = z : weave xs ys zs
+
+addColumn :: Matrix a -> Vector a -> Matrix a
+addColumn ms v = [row ++ [x] | (row, x) <- zipPedantic ms v]
+
+-- Given a list of vectors, check whether the given vector is in their span.
+inSpan :: (Fractional a, Eq a) => [Vector a] -> Vector a -> Bool
+inSpan vs b =
+  let as = transpose vs -- Consider vectors of span as columns in a matrix.
+      ms = addColumn as b
+  in rank as == rank ms

@@ -10,6 +10,7 @@ import Network.HTTP.Types.Header (hContentType)
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Text as T
 import Text.Read (readMaybe)
+import Control.Monad (forM_)
 
 import GoodSubsets (VectorTypeSet, recurse, inflate, permutations, rotationsAndReflections)
 import Data.Set (Set, empty, elems, singleton, (\\), size, toList, fromList, unions, member, union)
@@ -20,7 +21,7 @@ import Vector (Vector)
 import JSON
 import ConvexPolytope (ConvexPolytope, extremePoints)
 import qualified Data.Map as Map
-import Data.Map (Map, (!?))
+import Data.Map (Map, (!?), toAscList)
 import Data.List (genericIndex)
 
 main :: IO ()
@@ -29,6 +30,7 @@ main = do
   case args of
     ["goodsubsets"] -> mainGoodSubsets
     ["server"] -> mainServer
+    ["exhaustiveSearch"] -> mainExhaustiveSearch
     x -> putStrLn $ "Invalid arguments: " ++ show x
 
 mainGoodSubsets :: IO ()
@@ -64,6 +66,14 @@ mainServer :: IO ()
 mainServer = do
   lists <- backtrackings
   startServer $ server $ makeResponder lists
+
+mainExhaustiveSearch :: IO ()
+mainExhaustiveSearch = do
+  lists <- backtrackings
+  let zeroDimensionalTraces = [(i, trace) | (i, trace) <- toAscList lists, i >= 121]
+  forM_ zeroDimensionalTraces $ \(i, (_, trace)) -> do
+    print i
+    print $ length trace
 
 backtrackings :: IO (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope Rational, Vector Rational)]))
 backtrackings = do

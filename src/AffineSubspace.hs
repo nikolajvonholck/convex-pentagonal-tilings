@@ -1,7 +1,7 @@
-module AffineSubspace (AffineSubspace(..), HyperPlane(..), dimension, space, coordsInSpace, intersectWithHyperPlane, fromRationalAffineSubspace) where
+module AffineSubspace (AffineSubspace(..), HyperPlane(..), dimension, space, coordsInSpace, intersectWithHyperPlane, fromRationalAffineSubspace, subset) where
 
 import Vector (Vector, (|+|), (|-|), (|*|), dot, zero)
-import Matrix (Matrix, squareMatrix, reducedEchelonForm)
+import Matrix (Matrix, squareMatrix, reducedEchelonForm, inSpan)
 import AlgebraicNumber
 import Utils (extract, delta, zipWithPedantic)
 import JSON
@@ -27,6 +27,10 @@ dimension (ASS _ bs _) = genericLength bs
 -- Returns F^n as an affine subspace of itself.
 space :: Num a => Integer -> AffineSubspace a
 space n = ASS (zero n) (squareMatrix n delta) [] -- Is in normal form
+
+-- Decides whether the first affine subspace is contained in the second one.
+subset :: (Fractional a, Eq a) => AffineSubspace a -> AffineSubspace a -> Bool
+subset (ASS p vs _) (ASS q ws _) = inSpan ws (p |-| q) && all (inSpan ws) vs
 
 -- Converts coordinates with respect to the basis of the affine subspace into a
 -- point in the surrounding space.

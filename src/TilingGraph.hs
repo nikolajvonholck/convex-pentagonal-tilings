@@ -2,10 +2,11 @@ module TilingGraph (TilingGraph, exhaustiveSearch) where
 
 import Vector (Vector, zero, (|+|), (|-|), (|*|))
 import GoodSubsets (VectorType, VectorTypeSet)
-import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
-import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, fromRationalConvexPolytope)
+import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space, subset)
+import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, fromRationalConvexPolytope, affineSubspace)
 import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
 import ChebyshevPolynomial (commonDenominator, cosineFieldExtension, sinePoly, cosinePoly)
+import Type (Type(..), knownTypes)
 import Utils ((!))
 import JSON
 
@@ -257,9 +258,10 @@ pickIncompleteVertex g =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: PolygonConstructor -> Vector Rational -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
-backtrack constructor alpha xss g lp =
+backtrack :: [Type] -> PolygonConstructor -> Vector Rational -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
+backtrack compatibleTypes constructor alpha xss g lp =
   do -- Situation: We will have to add another tile.
+    guard $ all (\(T tname _ tlp) -> if affineSubspace tlp `subset` affineSubspace lp then traceShow ("found type", tname) False else True) compatibleTypes
     let incompleteVertex = pickIncompleteVertex g
     let maxVertexId = fst $ Map.findMax g -- initial 5.
     orientation <- orientations -- Pick direction of new pentagon.
@@ -273,7 +275,7 @@ backtrack constructor alpha xss g lp =
     let construction = constructor lp'
     guard $ isJust construction
     let ls = approximateLengths $ fromJust construction
-    (g', lp', ls) : backtrack constructor alpha xss (traceShow ("choice:", incompleteVertex) g') lp'
+    (g', lp', ls) : backtrack compatibleTypes constructor alpha xss g' lp'
 
 halfVertexTypes :: VectorTypeSet -> VectorTypeSet
 halfVertexTypes xs =
@@ -283,6 +285,7 @@ halfVertexTypes xs =
 exhaustiveSearch :: VectorTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope Rational, Vector Rational)])
 exhaustiveSearch xs alpha =
   let s = angleSum (traceShow alpha alpha)
+      compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
       (ps, q) = commonDenominator s
       r = cosineFieldExtension q
       sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
@@ -299,9 +302,9 @@ exhaustiveSearch xs alpha =
             constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
           ] -- (0, 1)^5
       xss = (xs, halfVertexTypes xs)
-  in case traceShow (xs, alpha, s) lp of
+  in case traceShow (xs, alpha, s, compatibleTypes) lp of
     Nothing -> []
-    Just lp' -> backtrack constructor alpha xss g lp'
+    Just lp' -> backtrack compatibleTypes constructor alpha xss g lp'
 
 type PolygonConstructor = ConvexPolytope Rational -> Maybe (ConvexPolytope AlgebraicNumber)
 
