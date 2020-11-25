@@ -261,7 +261,7 @@ pickIncompleteVertex g =
 backtrack :: [Type] -> PolygonConstructor -> Vector Rational -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
 backtrack compatibleTypes constructor alpha xss g lp =
   do -- Situation: We will have to add another tile.
-    guard $ all (\(T tname _ tlp) -> if affineSubspace tlp `subset` affineSubspace lp then traceShow ("found type", tname) False else True) compatibleTypes
+    guard $ all (\(T tname _ tlp) -> if affineSubspace lp `subset` affineSubspace tlp then traceShow ("found type", tname) False else True) compatibleTypes
     let incompleteVertex = pickIncompleteVertex g
     let maxVertexId = fst $ Map.findMax g -- initial 5.
     orientation <- orientations -- Pick direction of new pentagon.
@@ -302,7 +302,7 @@ exhaustiveSearch xs alpha =
             constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
           ] -- (0, 1)^5
       xss = (xs, halfVertexTypes xs)
-  in case traceShow (xs, alpha, s, compatibleTypes) lp of
+  in case traceShow (xs, alpha, s, [name | T name _ _ <- compatibleTypes]) lp of
     Nothing -> []
     Just lp' -> backtrack compatibleTypes constructor alpha xss g lp'
 
