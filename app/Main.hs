@@ -36,9 +36,8 @@ main = do
 mainGoodSubsets :: IO ()
 mainGoodSubsets = do
   putStrLn "Will determine all non-empty maximal good sets..."
-  let maximalSets = recurse
-  let maximalGoodSets = Map.filter id maximalSets
-  let nonEmptyMaximalGoodSets = Map.keysSet maximalGoodSets \\ singleton empty
+  let maximalGoodSets = recurse
+  let nonEmptyMaximalGoodSets = maximalGoodSets \\ singleton empty
   print $ size nonEmptyMaximalGoodSets -- 193 √
   let allPermutations = unions $ Set.map (fromList . permutations) nonEmptyMaximalGoodSets
   print $ size allPermutations -- 3495 √
