@@ -1,4 +1,4 @@
-module ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints, fromRationalConvexPolytope, affineSubspace) where
+module ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints, fromRationalConvexPolytope, affineSubspace) where
 
 import Vector (Vector, zero, (|-|), (|*|), dot, isZero)
 import Matrix (rank)

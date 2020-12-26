@@ -36,30 +36,30 @@ main = do
 mainGoodSubsets :: IO ()
 mainGoodSubsets = do
   putStrLn "Will determine all non-empty maximal good sets..."
-  let maximalGoodSets = recurse
+  let maximalGoodSets = recurse 5
   let nonEmptyMaximalGoodSets = maximalGoodSets \\ singleton empty
   print $ size nonEmptyMaximalGoodSets -- 193 √
-  let allPermutations = unions $ Set.map (fromList . permutations) nonEmptyMaximalGoodSets
+  let allPermutations = unions $ Set.map (fromList . (permutations 5)) nonEmptyMaximalGoodSets
   print $ size allPermutations -- 3495 √
   let representatives = unique (toList allPermutations) empty
   print $ length representatives -- 371 √
   putStrLn "Will compare with Michael Rao's results..."
   contents <- readFile "data/michael-rao-good-subsets.txt"
   let raoGenerators = read contents :: [[[Integer]]]
-  let raoGoodSubsets = case sequence $ map (inflate . fromList) raoGenerators of
+  let raoGoodSubsets = case sequence $ map ((inflate 5) . fromList) raoGenerators of
         Nothing -> error "Failed to compute Michael Rao's maximal good subsets."
         (Just goodSubsets) -> map fst goodSubsets
   putStrLn "Have we found the same maximal good subsets?"
   print $ (raoGoodSubsets `isSubsetOf` representatives) && (representatives `isSubsetOf` raoGoodSubsets)
   where
     isSubsetOf :: [VectorTypeSet] -> [VectorTypeSet] -> Bool
-    a `isSubsetOf` b = all (\vs -> any (`elem` b) $ rotationsAndReflections vs) a
+    a `isSubsetOf` b = all (\vs -> any (`elem` b) $ rotationsAndReflections 5 vs) a
     unique :: [VectorTypeSet] -> Set VectorTypeSet -> [VectorTypeSet]
     unique [] _ = []
     unique (vs:vss) except =
       if vs `member` except
         then unique vss except
-        else vs : (unique vss $ union except $ fromList $ rotationsAndReflections vs)
+        else vs : (unique vss $ union except $ fromList $ rotationsAndReflections 5 vs)
 
 mainServer :: IO ()
 mainServer = do
@@ -78,7 +78,7 @@ backtrackings :: IO (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope
 backtrackings = do
   contents <- readFile "data/michael-rao-good-subsets.txt"
   let raoGenerators = read contents :: [[[Integer]]]
-  let raoGoodSubsets = case sequence $ map (inflate . fromList) raoGenerators of
+  let raoGoodSubsets = case sequence $ map ((inflate 5) . fromList) raoGenerators of
         Nothing -> error "Failed to compute Michael Rao's maximal good subsets."
         (Just goodSubsets) -> goodSubsets
   return $ Map.fromList $ [(i, (alpha, exhaustiveSearch compat alpha)) | (i, (compat, angleCP)) <- enumerate raoGoodSubsets, let points = elems (extremePoints angleCP), points /= [], let alpha = head points]
