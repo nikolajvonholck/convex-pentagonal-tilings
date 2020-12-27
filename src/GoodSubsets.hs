@@ -9,7 +9,7 @@ import ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, b
 
 import qualified Data.Set as Set
 import Data.Set (Set, fromList, insert, (\\), elems, empty, union, singleton, intersection)
-import Data.List (genericLength, transpose, genericReplicate)
+import Data.List (genericLength, transpose, genericReplicate, tails)
 import Control.Monad (guard, foldM)
 import Data.Maybe (fromJust)
 
@@ -19,12 +19,12 @@ type VectorTypeSet = Set VectorType
 initialAngleCP :: Integer -> Maybe (ConvexPolytope Rational)
 initialAngleCP n = do
   ass <- intersectWithHyperPlane (space n) (HP (genericReplicate n 1) (fromInteger $ n - 2))
-  boundedConvexPolytope NonStrict ass [ineq i | i <- [1..n + 1]] -- 1 >= x_1 >= x_2 >= ... >= x_n >= 0
+  boundedConvexPolytope NonStrict ass [ineq i | i <- [1..n + 1]] -- 0 <= x_1 <= x_2 <= ... <= x_n <= 1
   where
     ineq :: Integer -> Constraint Rational
     ineq i =
-      let v = [if j == i - 1 then -1 else if j == i then 1 else 0 | j <- [1..n]]
-          q = if i == 1 then 1 else 0
+      let v = [if j == i - 1 then 1 else if j == i then -1 else 0 | j <- [1..n]]
+          q = if i == n + 1 then 1 else 0
       in constraint v q
 
 minmax :: Integer -> ConvexPolytope Rational -> ([Rational], [Rational], [Vector Rational], [Vector Rational])
@@ -73,13 +73,13 @@ recurse' _ _ _ Nothing _ = empty
 recurse' n xs except (Just angleCP) goodnessCP =
   let (minX, maxX, minXpoints, maxXpoints) = minmax n angleCP
   in if any (1<=) minX || any (0>=) maxX then empty else
-      let alpha = (1 / 2) |*| (head minXpoints |+| last maxXpoints) -- Pick any 'interior' point.
+      let alpha = (1 / 2) |*| (last minXpoints |+| head maxXpoints) -- Pick any 'interior' point.
           compat = compatSet n xs alpha
       in if not . null $ except `intersection` (compat \\ xs) then empty else
           let goodnessCP' = fromJust $ foldM cutHalfSpace goodnessCP [constraint (asRational v) 0 | v <- elems $ compat \\ xs]
               goodSets = if isGood compat goodnessCP' then singleton compat else empty
               u = constructU (zipPedantic minX minXpoints) alpha
-              vs = constructV u minX
+              vs = constructV minX u
               except' = compat `union` except
               vs' = elems $ vs \\ except'
           in fst $ foldl (\(goodSets', except'') v ->
@@ -109,20 +109,21 @@ isGood compat goodnessCP =
   in all (\e -> all (\c -> e `dot` asRational c == 0) compat) extr
 
 constructV :: Vector Rational -> Vector Rational -> VectorTypeSet
-constructV u minX =
-  let candidates = foldl (\vs (minXi, ui) -> [v' ++ [vi] | v' <- vs, vi <- [0..bound v' minXi ui]]) [[]] $ zipPedantic minX u
+constructV minX u =
+  let tailsReversed = tail . reverse . tails $ zipPedantic minX u
+      candidates = foldl (\vs' minXu' -> [vi:v' | v' <- vs', vi <- [0..bound v' minXu']]) [[]] tailsReversed
   in fromList [v | v <- candidates, asRational v `dot` u >= 0, asRational v `dot` minX <= 2]
   where
-    bound v' minXi ui = floor $ if minXi > 0
+    bound v' ((minXi, ui):minXu') = floor $ if minXi > 0
         then 2 / minXi
-        else (-1 / ui) * sum [vj * (max 0 uj) | (vj, uj, minXj) <- zip3 (asRational v') u minX, minXj > 0]
+        else (-1 / ui) * sum [vj * (max 0 uj) | (vj, (minXj, uj)) <- zipPedantic (asRational v') minXu', minXj > 0]
+    bound _ [] = error "Invalid input."
 
 constructU :: [(Rational, Vector Rational)] -> Vector Rational -> Vector Rational
-constructU [(minXNMinusOne, minXpointNMinusOne), (minXN, minXpointN)] alpha =
-  let alpha' = if minXN == 0 && minXNMinusOne == 0 then minXpointNMinusOne else minXpointN
+constructU ((minX1, minXpoint1):(minX2, minXpoint2):_) alpha =
+  let alpha' = if minX1 == 0 && minX2 == 0 then minXpoint2 else minXpoint1
   in alpha' |-| alpha
-constructU (_:mins) alpha' = constructU mins alpha'
-constructU [] _ = error "Invalid input."
+constructU _ _ = error "Invalid input."
 
 permutations :: Integer -> VectorTypeSet -> [VectorTypeSet]
 permutations n vs = [Set.map (permute p) vs | p <- symmetricGroup n]
