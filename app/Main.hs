@@ -12,7 +12,7 @@ import qualified Data.Text as T
 import Text.Read (readMaybe)
 import Control.Monad (forM_)
 
-import GoodSubsets (VectorTypeSet, recurse, inflate, permutations, rotationsAndReflections)
+import GoodSubsets (VectorTypeSet, goodSets, inflate, permutations, rotationsAndReflections)
 import Data.Set (Set, empty, elems, singleton, (\\), size, toList, fromList, unions, member, union)
 import qualified Data.Set as Set
 import TilingGraph (TilingGraph, exhaustiveSearch)
@@ -36,7 +36,7 @@ main = do
 mainGoodSubsets :: IO ()
 mainGoodSubsets = do
   putStrLn "Will determine all non-empty maximal good sets..."
-  let maximalGoodSets = recurse 5
+  let maximalGoodSets = goodSets 5
   let nonEmptyMaximalGoodSets = maximalGoodSets \\ singleton empty
   print $ size nonEmptyMaximalGoodSets -- 193 √
   let allPermutations = unions $ Set.map (fromList . (permutations 5)) nonEmptyMaximalGoodSets
