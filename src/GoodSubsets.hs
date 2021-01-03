@@ -75,16 +75,14 @@ goodSetsExcluding n xs rs (Just angleCP) goodnessCP =
   in if last mins == 1 || head maxs == 0 then empty else
       let as = (1 / 2) |*| (last minEs |+| head maxEs)
           xs' = compat n xs as
-      in if not . null $ rs `intersection` (xs' \\ xs) then empty else
+      in if not . null $ rs `intersection` xs' then empty else
           let goodnessCP' = fromJust $ foldM cutHalfSpace goodnessCP [constraint (asRational v) 0 | v <- elems $ xs' \\ xs]
-              vs = extensionCandidates as mins minEs
-              rs' = xs' `union` rs
-              vs' = elems $ vs \\ rs'
+              vs = elems $ extensionCandidates as mins minEs \\ (xs' `union` rs)
               g = unions $ do
-                    (v, initVs) <- zip vs' (tail $ inits vs')
+                    (v, prevVs) <- zip vs (inits vs)
                     let angleCP' = projectOntoHyperplane angleCP (HP (asRational v) 2)
                     let goodnessCP'' = fromJust $ cutHalfSpace goodnessCP' (constraint (asRational v) 0)
-                    return $ goodSetsExcluding n (insert v xs') (rs' `union` fromList initVs) angleCP' goodnessCP''
+                    return $ goodSetsExcluding n (insert v xs') (rs `union` fromList prevVs) angleCP' goodnessCP''
           in if isGood xs' goodnessCP' then insert xs' g else g
 
 asRational :: Vector Integer -> Vector Rational
