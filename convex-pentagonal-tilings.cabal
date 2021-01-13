@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ae80bc16d222601db1c2b74e1091ffbc442e65ce6e3d4501cde9ce0fc7f656db
+-- hash: 81fdfd2a539c4a573e56fd15ae563de3ef1ac1e5fd478a3cc65d251b87bd131e
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
@@ -31,7 +31,7 @@ library
       AlgebraicNumber
       ChebyshevPolynomial
       ConvexPolytope
-      GoodSubsets
+      GoodSet
       Interval
       JSON
       Matrix

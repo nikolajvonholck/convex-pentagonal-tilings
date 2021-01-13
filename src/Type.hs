@@ -1,6 +1,6 @@
 module Type (Type(..), knownTypes) where
 
-import GoodSubsets (VectorTypeSet)
+import GoodSet (VertexTypeSet)
 import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
 import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope)
 import Permutation (dihedralGroup, permute)
@@ -11,12 +11,12 @@ import Data.Set (fromList)
 import Control.Monad (foldM)
 import Data.Maybe (fromJust)
 
-data Type = T String VectorTypeSet (ConvexPolytope Rational) deriving (Show, Eq)
+data Type = T String VertexTypeSet (ConvexPolytope Rational) deriving (Show, Eq)
 
 knownTypes :: [Type]
 knownTypes = concat $ typeSymmetries <$> types
 
-typeSymmetries :: (String, VectorTypeSet, [HyperPlane Rational]) -> [Type]
+typeSymmetries :: (String, VertexTypeSet, [HyperPlane Rational]) -> [Type]
 typeSymmetries (name, cvts, cs) =
   [ T name' cvts' (makeLP cs') | (i, r) <- enumerate (dihedralGroup 5),
                                  (mA, mS) <- [(id, id), (reflectAngles, reflectSides)],
@@ -42,7 +42,7 @@ makeLP hps = fromJust $ do
     ] -- (0, 1)^5
 
 -- name, corrected vector types, linear constraints.
-types :: [(String, VectorTypeSet, [HyperPlane Rational])]
+types :: [(String, VertexTypeSet, [HyperPlane Rational])]
 types = [
     ("Type 1",
       fromList [

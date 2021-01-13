@@ -1,7 +1,7 @@
 module TilingGraph (TilingGraph, exhaustiveSearch) where
 
 import Vector (Vector, zero, (|+|), (|-|), (|*|))
-import GoodSubsets (VectorType, VectorTypeSet)
+import GoodSet (VertexType, VertexTypeSet)
 import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space, subset)
 import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, fromRationalConvexPolytope, affineSubspace)
 import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
@@ -58,8 +58,8 @@ isVertexComplete :: [Corner] -> Bool
 isVertexComplete ((Corner Unknown _ _ _):_) = False
 isVertexComplete _ = True
 
-vectorType :: [Corner] -> VectorType
-vectorType cs = [genericLength $ filter (\c -> interiorAngle c == a) cs | a <- interiorAngles]
+vertexType :: [Corner] -> VertexType
+vertexType cs = [genericLength $ filter (\c -> interiorAngle c == a) cs | a <- interiorAngles]
 
 cornerList :: TilingGraph -> Vertex -> [Corner]
 cornerList g v = fromJust $ Map.lookup v g
@@ -79,17 +79,17 @@ cornerAfter g v i = helper $ wrappedCornerList g v
 lengthCounts :: [Length] -> Vector Integer
 lengthCounts ll = [genericLength $ filter (l==) ll | l <- lengths]
 
-isVertexValidHalfVertex :: (VectorTypeSet, VectorTypeSet) -> [Corner] -> Bool
+isVertexValidHalfVertex :: (VertexTypeSet, VertexTypeSet) -> [Corner] -> Bool
 isVertexValidHalfVertex (_, xs) cs =
-  let vt = vectorType cs
+  let vt = vertexType cs
   in if isVertexComplete cs
     then vt `member` xs
     else any (\x -> all (\(v, w) -> v <= w) $ zip vt x) xs
 
-isVertexValid :: (VectorTypeSet, VectorTypeSet) -> [Corner] -> Bool
+isVertexValid :: (VertexTypeSet, VertexTypeSet) -> [Corner] -> Bool
 isVertexValid xss cs =
   let pis = length (filter (\c -> exteriorAngle c == Pi) cs)
-      vt = vectorType cs
+      vt = vertexType cs
       xs = case pis of
         0 -> fst xss
         1 -> snd xss
@@ -166,7 +166,7 @@ exteriorRuns g =
 
 type HalfInDirection = (Vertex, Orientation)
 
-completeRuns :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
+completeRuns :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
 completeRuns xss (g, lp) = completeRuns' empty $ exteriorRuns g
   where
     completeRuns' :: Set HalfInDirection -> [Run] -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
@@ -216,7 +216,7 @@ completeRuns xss (g, lp) = completeRuns' empty $ exteriorRuns g
 
 -- v is first in run, v' is last (counterclockwise rotation/run around graph)
 -- vertex (min v v') is kept, while (max v v') is discarded.
-mergeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
+mergeVertices :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
 mergeVertices xss (g, lp) v v' a =
   do
     let iss = case (cornerList g v, cornerList g v') of
@@ -237,7 +237,7 @@ mergeVertices xss (g, lp) v v' a =
     -- Returns corner list, completed if possible.
     completeVertex :: [Corner] -> [Corner]
     completeVertex (css@((Corner Unknown e1 ia e2):is)) =
-      let vt = vectorType css
+      let vt = vertexType css
           ea = if vt `member` snd xss then
                   case length (filter (\c -> exteriorAngle c == Pi) css) of
                     0 -> Pi
@@ -272,7 +272,7 @@ pickIncompleteVertex g hv =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: [Type] -> (VectorTypeSet, VectorTypeSet) -> (TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
+backtrack :: [Type] -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
 backtrack compatibleTypes xss (g, hv, lp) =
   do -- Situation: We will have to add another tile.
     guard $ all (\(T tname _ tlp) -> if affineSubspace lp `subset` affineSubspace (fromRationalConvexPolytope tlp) then traceShow ("found type", tname) False else True) compatibleTypes
@@ -289,12 +289,12 @@ backtrack compatibleTypes xss (g, hv, lp) =
     let ls = approximateLengths lp'
     (g', lp', ls) : backtrack compatibleTypes xss (g', hv', lp')
 
-halfVertexTypes :: VectorTypeSet -> VectorTypeSet
+halfVertexTypes :: VertexTypeSet -> VertexTypeSet
 halfVertexTypes xs =
   let withEvenValues = Set.filter (\x -> all (\v -> v `mod` 2 == 0) x) xs
   in Set.map (\x -> [v `div` 2 | v <- x]) withEvenValues
 
-exhaustiveSearch :: VectorTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)])
+exhaustiveSearch :: VertexTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)])
 exhaustiveSearch xs alpha =
   let s = angleSum (traceShow alpha alpha)
       compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
