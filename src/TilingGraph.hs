@@ -15,7 +15,7 @@ import qualified Data.Set as Set
 import Data.Set (member, elems)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, insert, delete, fromList)
-import Data.Maybe (fromJust, isJust)
+import Data.Maybe (fromJust)
 import Data.List (find, genericTake)
 import Control.Monad (guard, foldM)
 
@@ -28,8 +28,8 @@ data ExteriorAngle = Unknown | Zero | Pi deriving (Show, Eq)
 data Length = LengthA | LengthB | LengthC | LengthD | LengthE deriving (Show, Eq)
 data Orientation = CounterClockwise | ClockWise
 
-asRational :: Vector Integer -> Vector Rational
-asRational = map fromInteger
+asAlgNum :: Vector Integer -> Vector AlgebraicNumber
+asAlgNum = map fromInteger
 
 orientations :: [Orientation]
 orientations = [CounterClockwise, ClockWise]
@@ -164,17 +164,17 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
-completeRuns :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
+completeRuns :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
 completeRuns xss (g, lp) = completeRuns' $ exteriorRuns g
   where
-    completeRuns' :: [Run] -> [(TilingGraph, ConvexPolytope Rational)]
+    completeRuns' :: [Run] -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
     completeRuns' [] = [(g, lp)]
     completeRuns' (r:rs) =
       let (x, y) = runEnds r
       in case map lengthCounts $ runLengths r of
         [_] -> completeRuns' rs -- No bends to check. Skip this run.
         [la, lb] ->
-          let cs = asRational $ la |-| lb -- la < lb
+          let cs = asAlgNum $ la |-| lb -- la < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
             (Just _, Nothing, Nothing) ->
               do
@@ -190,7 +190,7 @@ completeRuns xss (g, lp) = completeRuns' $ exteriorRuns g
                 Nothing -> error "Impossible: There should always be an option"
                 Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
         [la, lb, lc] ->
-          let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
+          let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0)) of
             (Just _, Nothing) ->
               do
@@ -206,7 +206,7 @@ completeRuns xss (g, lp) = completeRuns' $ exteriorRuns g
 
 -- v is first in run, v' is last (counterclockwise rotation/run around graph)
 -- vertex (min v v') is kept, while (max v v') is discarded.
-mergeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
+mergeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
 mergeVertices xss (g, lp) v v' a =
   do
     let iss = case (cornerList g v, cornerList g v') of
@@ -258,10 +258,10 @@ pickIncompleteVertex g =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: [Type] -> PolygonConstructor -> Vector Rational -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Vector Rational)]
-backtrack compatibleTypes constructor alpha xss g lp =
+backtrack :: [Type] -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope AlgebraicNumber -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
+backtrack compatibleTypes xss g lp =
   do -- Situation: We will have to add another tile.
-    guard $ all (\(T tname _ tlp) -> if affineSubspace lp `subset` affineSubspace tlp then traceShow ("found type", tname) False else True) compatibleTypes
+    guard $ all (\(T tname _ tlp) -> if affineSubspace lp `subset` affineSubspace (fromRationalConvexPolytope tlp) then traceShow ("found type", tname) False else True) compatibleTypes
     let incompleteVertex = pickIncompleteVertex g
     let maxVertexId = fst $ Map.findMax g -- initial 5.
     orientation <- orientations -- Pick direction of new pentagon.
@@ -272,17 +272,15 @@ backtrack compatibleTypes constructor alpha xss g lp =
     -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
     (g', lp') <- mergeVertices xss (disconnectedGraph, lp) cornerVertexId incompleteVertex Zero
     -- All possible completions will be handled inside 'mergeVertices'.
-    let construction = constructor lp'
-    guard $ isJust construction
-    let ls = approximateLengths $ fromJust construction
-    (g', lp', ls) : backtrack compatibleTypes constructor alpha xss g' lp'
+    let ls = approximateLengths lp'
+    (g', lp', ls) : backtrack compatibleTypes xss g' lp'
 
 halfVertexTypes :: VectorTypeSet -> VectorTypeSet
 halfVertexTypes xs =
   let withEvenValues = Set.filter (\x -> all (\v -> v `mod` 2 == 0) x) xs
   in Set.map (\x -> [v `div` 2 | v <- x]) withEvenValues
 
-exhaustiveSearch :: VectorTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope Rational, Vector Rational)])
+exhaustiveSearch :: VectorTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)])
 exhaustiveSearch xs alpha =
   let s = angleSum (traceShow alpha alpha)
       compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
@@ -290,10 +288,9 @@ exhaustiveSearch xs alpha =
       r = cosineFieldExtension q
       sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
       cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
-      constructor = constructPolygon [sineConstraint, cosineConstraint]
-      g = (pentagonGraph 0 CounterClockwise)
+      g = pentagonGraph 0 CounterClockwise
       lp = do
-        ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1)]
+        ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1), sineConstraint, cosineConstraint]
         boundedConvexPolytope Strict ass [
             constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
             constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
@@ -304,13 +301,7 @@ exhaustiveSearch xs alpha =
       xss = (xs, halfVertexTypes xs)
   in case traceShow (xs, alpha, s, [name | T name _ _ <- compatibleTypes]) lp of
     Nothing -> []
-    Just lp' -> backtrack compatibleTypes constructor alpha xss g lp'
-
-type PolygonConstructor = ConvexPolytope Rational -> Maybe (ConvexPolytope AlgebraicNumber)
-
-constructPolygon :: [HyperPlane AlgebraicNumber] -> PolygonConstructor
-constructPolygon cs lp =
-  foldM projectOntoHyperplane (fromRationalConvexPolytope lp) cs
+    Just lp' -> backtrack compatibleTypes xss g lp'
 
 pentagonGraph :: Vertex -> Orientation -> TilingGraph
 pentagonGraph w orientation =

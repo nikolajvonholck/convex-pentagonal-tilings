@@ -13,6 +13,7 @@ import Text.Read (readMaybe)
 import Control.Monad (forM_)
 
 import GoodSubsets (VectorTypeSet, goodSets, inflate, permutations, rotationsAndReflections)
+import AlgebraicNumber (AlgebraicNumber)
 import Data.Set (Set, empty, elems, singleton, (\\), size, toList, fromList, unions, member, union)
 import qualified Data.Set as Set
 import TilingGraph (TilingGraph, exhaustiveSearch)
@@ -74,7 +75,7 @@ mainExhaustiveSearch = do
     print i
     print $ length trace
 
-backtrackings :: IO (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope Rational, Vector Rational)]))
+backtrackings :: IO (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]))
 backtrackings = do
   contents <- readFile "data/michael-rao-good-subsets.txt"
   let raoGenerators = read contents :: [[[Integer]]]
@@ -102,7 +103,7 @@ server res req respond = respond $
           Nothing -> responseLBS status404 [(hContentType, "text/plain")] "Invalid input"
       _ -> responseLBS status200 [(hContentType, "text/plain")] $ "Convex pentagonal tiling server."
 
-makeResponder :: (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope Rational, Vector Rational)])) -> Integer -> Integer -> String
+makeResponder :: (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)])) -> Integer -> Integer -> String
 makeResponder lists i k =
   case lists !? i of
     Nothing -> "Good subset not found: " ++ show i
