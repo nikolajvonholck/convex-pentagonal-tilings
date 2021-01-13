@@ -12,7 +12,7 @@ import JSON
 
 import Data.List (genericLength)
 import qualified Data.Set as Set
-import Data.Set (member, elems)
+import Data.Set (Set, empty, member, notMember, elems)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, insert, delete, fromList)
 import Data.Maybe (fromJust)
@@ -26,7 +26,7 @@ type Vertex = Integer
 data InteriorAngle = AngleA | AngleB | AngleC | AngleD | AngleE deriving (Show, Eq)
 data ExteriorAngle = Unknown | Zero | Pi deriving (Show, Eq)
 data Length = LengthA | LengthB | LengthC | LengthD | LengthE deriving (Show, Eq)
-data Orientation = CounterClockwise | ClockWise deriving (Show, Eq)
+data Orientation = CounterClockwise | ClockWise deriving (Show, Eq, Ord)
 
 asAlgNum :: Vector Integer -> Vector AlgebraicNumber
 asAlgNum = map fromInteger
@@ -166,11 +166,11 @@ exteriorRuns g =
 
 type HalfInDirection = (Vertex, Orientation)
 
-completeRuns :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
-completeRuns xss (g, lp) = completeRuns' [] $ exteriorRuns g
+completeRuns :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
+completeRuns xss (g, lp) = completeRuns' empty $ exteriorRuns g
   where
-    completeRuns' :: [HalfInDirection] -> [Run] -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
-    completeRuns' _ [] = [(g, lp)]
+    completeRuns' :: Set HalfInDirection -> [Run] -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
+    completeRuns' hv [] = [(g, hv, lp)]
     completeRuns' hvs (r:rs) =
       let (x, y) = runEnds r
       in case map lengthCounts $ runLengths r of
@@ -182,15 +182,15 @@ completeRuns xss (g, lp) = completeRuns' [] $ exteriorRuns g
               do
                 guard $ isVertexValidHalfVertex xss (cornerList g x)
                 let hv = (x, ClockWise)
-                guard $ (x, CounterClockwise) `notElem` hvs
-                completeRuns' (hv:hvs) rs
+                guard $ (x, CounterClockwise) `notMember` hvs
+                completeRuns' (Set.insert hv hvs) rs
             (Nothing, Just _, Nothing) -> mergeVertices xss (g, lp) x y Zero
             (Nothing, Nothing, Just _) ->
               do
                 guard $ isVertexValidHalfVertex xss (cornerList g y)
                 let hv = (y, CounterClockwise)
-                guard $ (y, ClockWise) `notElem` hvs
-                completeRuns' (hv:hvs) rs
+                guard $ (y, ClockWise) `notMember` hvs
+                completeRuns' (Set.insert hv hvs) rs
             (lpleq, lpeq, lpgeq) -> -- Decide run.
               case sequence [lpleq, lpeq, lpgeq] of
                 Nothing -> error "Impossible: There should always be an option"
@@ -204,9 +204,9 @@ completeRuns xss (g, lp) = completeRuns' [] $ exteriorRuns g
                 guard $ isVertexValidHalfVertex xss (cornerList g y)
                 let hvx = (x, ClockWise)
                 let hvy = (y, CounterClockwise)
-                guard $ (x, CounterClockwise) `notElem` hvs
-                guard $ (y, ClockWise) `notElem` hvs
-                completeRuns' (hvy:hvx:hvs) rs
+                guard $ (x, CounterClockwise) `notMember` hvs
+                guard $ (y, ClockWise) `notMember` hvs
+                completeRuns' (Set.insert hvy $ Set.insert hvx hvs) rs
             (Nothing, Just _) -> mergeVertices xss (g, lp) x y Pi
             (lpleq, lpeq) -> -- Decide run.
               case sequence [lpleq, lpeq] of
@@ -216,7 +216,7 @@ completeRuns xss (g, lp) = completeRuns' [] $ exteriorRuns g
 
 -- v is first in run, v' is last (counterclockwise rotation/run around graph)
 -- vertex (min v v') is kept, while (max v v') is discarded.
-mergeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+mergeVertices :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
 mergeVertices xss (g, lp) v v' a =
   do
     let iss = case (cornerList g v, cornerList g v') of
@@ -248,19 +248,23 @@ mergeVertices xss (g, lp) v v' a =
       in (Corner ea e1 ia e2):is
     completeVertex css = css
 
-pickIncompleteVertex :: TilingGraph -> Vertex
-pickIncompleteVertex g =
-  let weightedIncompleteVertices =
+pickIncompleteVertex :: TilingGraph -> Set HalfInDirection -> Vertex
+pickIncompleteVertex g hv =
+  let halfVertices = Set.map fst hv
+      weighted =
         [(v, v) | v <- Map.keys $ Map.filter (not . isVertexComplete) g] ++
-        [(v, weight) | run <- exteriorRuns g,
+        [(v, w) | run <- exteriorRuns g,
                        let bends = runBends run,
-                       length bends == 2,
-                       let weight = leastVertexAlongRun run,
+                       length bends > 0,
+                       let w = leastVertexAlongRun run,
                        let (x, y) = runEnds run,
                        v <- [x, y],
+                       v `member` halfVertices,
                        not (isVertexComplete (cornerList g v))]
-      leastWeight = minimum [w | (_, w) <- weightedIncompleteVertices]
-  in minimum [v | (v, w) <- weightedIncompleteVertices, w == leastWeight]
+      weighted' = [(v, w') | (v, w) <- weighted,
+                             let w' = if v `member` halfVertices then w - 5 else w]
+      leastWeight = minimum [w | (_, w) <- weighted']
+  in minimum [v | (v, w) <- weighted', w == leastWeight]
 
 -- Assumes all possible completions performed.
 -- Assumptions:
@@ -268,11 +272,11 @@ pickIncompleteVertex g =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: [Type] -> (VectorTypeSet, VectorTypeSet) -> TilingGraph -> ConvexPolytope AlgebraicNumber -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
-backtrack compatibleTypes xss g lp =
+backtrack :: [Type] -> (VectorTypeSet, VectorTypeSet) -> (TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
+backtrack compatibleTypes xss (g, hv, lp) =
   do -- Situation: We will have to add another tile.
     guard $ all (\(T tname _ tlp) -> if affineSubspace lp `subset` affineSubspace (fromRationalConvexPolytope tlp) then traceShow ("found type", tname) False else True) compatibleTypes
-    let incompleteVertex = pickIncompleteVertex g
+    let incompleteVertex = pickIncompleteVertex g hv
     let maxVertexId = fst $ Map.findMax g -- initial 5.
     orientation <- orientations -- Pick direction of new pentagon.
     let anotherTile = pentagonGraph maxVertexId orientation
@@ -280,10 +284,10 @@ backtrack compatibleTypes xss g lp =
     corner <- interiorAngles
     let cornerVertexId = fst $ fromJust $ minWhere (\(_, cs) -> any (\c -> interiorAngle c == corner) cs) anotherTile
     -- Will be glued on in counterclockwise rotation around 'leastIncompleteVertexId'.
-    (g', lp') <- mergeVertices xss (disconnectedGraph, lp) cornerVertexId incompleteVertex Zero
+    (g', hv', lp') <- mergeVertices xss (disconnectedGraph, lp) cornerVertexId incompleteVertex Zero
     -- All possible completions will be handled inside 'mergeVertices'.
     let ls = approximateLengths lp'
-    (g', lp', ls) : backtrack compatibleTypes xss g' lp'
+    (g', lp', ls) : backtrack compatibleTypes xss (g', hv', lp')
 
 halfVertexTypes :: VectorTypeSet -> VectorTypeSet
 halfVertexTypes xs =
@@ -311,7 +315,7 @@ exhaustiveSearch xs alpha =
       xss = (xs, halfVertexTypes xs)
   in case traceShow (xs, alpha, s, [name | T name _ _ <- compatibleTypes]) lp of
     Nothing -> []
-    Just lp' -> backtrack compatibleTypes xss g lp'
+    Just lp' -> backtrack compatibleTypes xss (g, empty, lp')
 
 pentagonGraph :: Vertex -> Orientation -> TilingGraph
 pentagonGraph w orientation =
