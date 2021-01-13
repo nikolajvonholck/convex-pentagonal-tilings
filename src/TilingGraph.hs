@@ -26,7 +26,7 @@ type Vertex = Integer
 data InteriorAngle = AngleA | AngleB | AngleC | AngleD | AngleE deriving (Show, Eq)
 data ExteriorAngle = Unknown | Zero | Pi deriving (Show, Eq)
 data Length = LengthA | LengthB | LengthC | LengthD | LengthE deriving (Show, Eq)
-data Orientation = CounterClockwise | ClockWise
+data Orientation = CounterClockwise | ClockWise deriving (Show, Eq)
 
 asAlgNum :: Vector Integer -> Vector AlgebraicNumber
 asAlgNum = map fromInteger
@@ -164,27 +164,33 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
+type HalfInDirection = (Vertex, Orientation)
+
 completeRuns :: (VectorTypeSet, VectorTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
-completeRuns xss (g, lp) = completeRuns' $ exteriorRuns g
+completeRuns xss (g, lp) = completeRuns' [] $ exteriorRuns g
   where
-    completeRuns' :: [Run] -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
-    completeRuns' [] = [(g, lp)]
-    completeRuns' (r:rs) =
+    completeRuns' :: [HalfInDirection] -> [Run] -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+    completeRuns' _ [] = [(g, lp)]
+    completeRuns' hvs (r:rs) =
       let (x, y) = runEnds r
       in case map lengthCounts $ runLengths r of
-        [_] -> completeRuns' rs -- No bends to check. Skip this run.
+        [_] -> completeRuns' hvs rs -- No bends to check. Skip this run.
         [la, lb] ->
           let cs = asAlgNum $ la |-| lb -- la < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
             (Just _, Nothing, Nothing) ->
               do
                 guard $ isVertexValidHalfVertex xss (cornerList g x)
-                completeRuns' rs
+                let hv = (x, ClockWise)
+                guard $ (x, CounterClockwise) `notElem` hvs
+                completeRuns' (hv:hvs) rs
             (Nothing, Just _, Nothing) -> mergeVertices xss (g, lp) x y Zero
             (Nothing, Nothing, Just _) ->
               do
                 guard $ isVertexValidHalfVertex xss (cornerList g y)
-                completeRuns' rs
+                let hv = (y, CounterClockwise)
+                guard $ (y, ClockWise) `notElem` hvs
+                completeRuns' (hv:hvs) rs
             (lpleq, lpeq, lpgeq) -> -- Decide run.
               case sequence [lpleq, lpeq, lpgeq] of
                 Nothing -> error "Impossible: There should always be an option"
@@ -196,7 +202,11 @@ completeRuns xss (g, lp) = completeRuns' $ exteriorRuns g
               do
                 guard $ isVertexValidHalfVertex xss (cornerList g x)
                 guard $ isVertexValidHalfVertex xss (cornerList g y)
-                completeRuns' rs
+                let hvx = (x, ClockWise)
+                let hvy = (y, CounterClockwise)
+                guard $ (x, CounterClockwise) `notElem` hvs
+                guard $ (y, ClockWise) `notElem` hvs
+                completeRuns' (hvy:hvx:hvs) rs
             (Nothing, Just _) -> mergeVertices xss (g, lp) x y Pi
             (lpleq, lpeq) -> -- Decide run.
               case sequence [lpleq, lpeq] of
