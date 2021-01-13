@@ -342,7 +342,7 @@ minWhere p m = find p (Map.toAscList m)
 approximateLengths :: ConvexPolytope AlgebraicNumber -> Vector Rational
 approximateLengths lp =
   let lengthsExtr = elems $ extremePoints lp
-  in map (approximate 0.001) $ (1 / (fromInteger $ genericLength lengthsExtr)) |*| (foldl (|+|) (zero 5) lengthsExtr)
+  in map (approximate 0.00001) $ (1 / (fromInteger $ genericLength lengthsExtr)) |*| (foldl (|+|) (zero 5) lengthsExtr)
 
 instance JSON Corner where
   toJSON (Corner ea (l1, v1) ia (l2, v2)) =
