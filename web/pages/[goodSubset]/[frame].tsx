@@ -1,24 +1,45 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import styles from '../../styles/ui.module.css'
-import { NextPage } from 'next'
+import { GetServerSideProps, NextPage } from 'next'
 import Graph from '../../components/Graph'
 import LinearProgram from '../../components/LinearProgram'
 import useIteration from '../../hooks/useIteration'
+import {
+  RiPlayFill,
+  RiPauseFill,
+  RiRewindFill,
+  RiSkipBackFill,
+  RiSkipForwardFill
+} from 'react-icons/ri'
 
-const Home: NextPage = () => {
-  const router = useRouter()
-  const { goodSubset, frame } = router.query
-  const goodSubsetId = +goodSubset
-  const iteration = +frame
+type PageProps = { goodSetId: number }
 
-  const [response, isLoading, error] = useIteration(goodSubsetId, iteration)
-  const goToIteration = (iteration) =>
-    router.push(`/${goodSubsetId}/${iteration}`)
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  return {
+    props: { goodSetId: +context.params.goodSubset }
+  }
+}
 
-  const nextIteration = iteration + 1
-  const prevIteration = Math.max(iteration - 1, 0)
+const Page: NextPage<PageProps> = ({ goodSetId }) => {
+  const [iteration, setIteration] = useState(0)
+
+  const [response, isLoading, error] = useIteration(goodSetId, iteration)
+
+  const [isPlaying, setIsPlaying] = useState(false)
+
+  useEffect(() => error && setIsPlaying(false), [error]) // Stop playing upon error.
+
+  // Increase iteration upon loading it.
+  useEffect(() => {
+    if (error) {
+      return setIsPlaying(false)
+    }
+    if (isPlaying && !isLoading) {
+      setIteration((i) => i + 1)
+    }
+  }, [isPlaying, isLoading])
 
   return (
     <div className={styles.container}>
@@ -26,17 +47,34 @@ const Home: NextPage = () => {
         <title>Convex Pentagonal Tilings</title>
       </Head>
       <div className={styles.sidebar}>
-        <div className={styles.section}>Good subset: {goodSubsetId}</div>
+        <div className={styles.section}>Good subset: {goodSetId}</div>
         <div className={styles.section}>
           <div>Iteration: {iteration}</div>
+          <input
+            type='text'
+            onChange={(e) => setIteration(+e.target.value)}
+            value={iteration}
+          />
           {isLoading && <img className={styles.spinner} src='/spinner.svg' />}
         </div>
         <div className={styles.buttonContainer}>
-          <button type='button' onClick={() => goToIteration(prevIteration)}>
-            Previous
+          <button type='button' onClick={() => setIsPlaying((v) => !v)}>
+            {isPlaying ? <RiPauseFill size={20} /> : <RiPlayFill size={20} />}
           </button>
-          <button type='button' onClick={() => goToIteration(nextIteration)}>
-            Next
+        </div>
+        <div className={styles.buttonContainer}>
+          <button type='button' onClick={() => setIteration(0)}>
+            <RiRewindFill size={20} />
+          </button>
+          <button
+            type='button'
+            onClick={() => setIteration((i) => Math.max(i - 1, 0))}
+          >
+            <RiSkipBackFill size={20} />
+          </button>
+
+          <button type='button' onClick={() => setIteration((i) => i + 1)}>
+            <RiSkipForwardFill size={20} />
           </button>
         </div>
         {error && (
@@ -60,4 +98,4 @@ const Home: NextPage = () => {
   )
 }
 
-export default Home
+export default Page
