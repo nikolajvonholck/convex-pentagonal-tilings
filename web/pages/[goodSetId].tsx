@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import Head from 'next/head'
-import { useRouter } from 'next/router'
-import styles from '../../styles/ui.module.css'
+import styles from '../styles/ui.module.css'
 import { GetServerSideProps, NextPage } from 'next'
-import Graph from '../../components/Graph'
-import LinearProgram from '../../components/LinearProgram'
-import useIteration from '../../hooks/useIteration'
+import Graph from '../components/Graph'
+import LinearProgram from '../components/LinearProgram'
+import useIteration from '../hooks/useIteration'
 import {
   RiPlayFill,
   RiPauseFill,
@@ -16,11 +15,9 @@ import {
 
 type PageProps = { goodSetId: number }
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  return {
-    props: { goodSetId: +context.params.goodSubset }
-  }
-}
+export const getServerSideProps: GetServerSideProps = async (context) => ({
+  props: { goodSetId: +context.params.goodSetId }
+})
 
 const Page: NextPage<PageProps> = ({ goodSetId }) => {
   const [iteration, setIteration] = useState(0)
