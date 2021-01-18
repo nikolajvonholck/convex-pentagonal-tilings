@@ -26,13 +26,10 @@ type Vertex = Integer
 data InteriorAngle = AngleA | AngleB | AngleC | AngleD | AngleE deriving (Show, Eq)
 data ExteriorAngle = Unknown | Zero | Pi deriving (Show, Eq)
 data Length = LengthA | LengthB | LengthC | LengthD | LengthE deriving (Show, Eq)
-data Orientation = CounterClockwise | ClockWise deriving (Show, Eq, Ord)
+data Direction = CounterClockwise | Clockwise deriving (Show, Eq, Ord)
 
 asAlgNum :: Vector Integer -> Vector AlgebraicNumber
 asAlgNum = map fromInteger
-
-orientations :: [Orientation]
-orientations = [CounterClockwise, ClockWise]
 
 -- A corner of a pentagon is represented by giving the exterior angle, then the
 -- length to the first vertex, then the interior angle and lastly the length to
@@ -168,37 +165,37 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
-type HalfInDirection = (Vertex, Orientation)
+type HalfInDirection = (Vertex, Direction)
 
-completeRuns :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
-completeRuns xss (g, lp) = completeRuns' empty $ exteriorRuns g
+completeRuns :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
+completeRuns xss (g, hvs, lp) = completeRuns' hvs $ exteriorRuns g
   where
     completeRuns' :: Set HalfInDirection -> [Run] -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
-    completeRuns' hv [] = [(g, hv, lp)]
-    completeRuns' hvs (r:rs) =
+    completeRuns' hvs' [] = [(g, hvs', lp)]
+    completeRuns' hvs' (r:rs) =
       let (x, y) = runEnds r
       in case map lengthCounts $ runLengths r of
-        [_] -> completeRuns' hvs rs -- No bends to check. Skip this run.
+        [_] -> completeRuns' hvs' rs -- No bends to check. Skip this run.
         [la, lb] ->
           let cs = asAlgNum $ la |-| lb -- la < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
             (Just _, Nothing, Nothing) ->
               do
                 guard $ isVertexValidHalfVertex xss (cornerList g x)
-                let hv = (x, ClockWise)
-                guard $ (x, CounterClockwise) `notMember` hvs
-                completeRuns' (Set.insert hv hvs) rs
-            (Nothing, Just _, Nothing) -> mergeVertices xss (g, lp) x y Zero
+                let hv = (x, Clockwise)
+                guard $ (x, CounterClockwise) `notMember` hvs'
+                completeRuns' (Set.insert hv hvs') rs
+            (Nothing, Just _, Nothing) -> mergeVertices xss (g, hvs', lp) y x Zero
             (Nothing, Nothing, Just _) ->
               do
                 guard $ isVertexValidHalfVertex xss (cornerList g y)
                 let hv = (y, CounterClockwise)
-                guard $ (y, ClockWise) `notMember` hvs
-                completeRuns' (Set.insert hv hvs) rs
+                guard $ (y, Clockwise) `notMember` hvs'
+                completeRuns' (Set.insert hv hvs') rs
             (lpleq, lpeq, lpgeq) -> -- Decide run.
               case sequence [lpleq, lpeq, lpgeq] of
                 Nothing -> error "Impossible: There should always be an option"
-                Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
+                Just lps' -> do lp' <- lps'; completeRuns xss (g, hvs', lp')
         [la, lb, lc] ->
           let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0)) of
@@ -206,32 +203,36 @@ completeRuns xss (g, lp) = completeRuns' empty $ exteriorRuns g
               do
                 guard $ isVertexValidHalfVertex xss (cornerList g x)
                 guard $ isVertexValidHalfVertex xss (cornerList g y)
-                let hvx = (x, ClockWise)
+                let hvx = (x, Clockwise)
                 let hvy = (y, CounterClockwise)
-                guard $ (x, CounterClockwise) `notMember` hvs
-                guard $ (y, ClockWise) `notMember` hvs
-                completeRuns' (Set.insert hvy $ Set.insert hvx hvs) rs
-            (Nothing, Just _) -> mergeVertices xss (g, lp) x y Pi
+                guard $ (x, CounterClockwise) `notMember` hvs'
+                guard $ (y, Clockwise) `notMember` hvs'
+                completeRuns' (Set.insert hvy $ Set.insert hvx hvs') rs
+            (Nothing, Just _) -> mergeVertices xss (g, hvs', lp) y x Pi
             (lpleq, lpeq) -> -- Decide run.
               case sequence [lpleq, lpeq] of
                 Nothing -> [] -- Backtrack: Violation of triangle inequality.
-                Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
+                Just lps' -> do lp' <- lps'; completeRuns xss (g, hvs', lp')
         _ -> [] -- Backtrack: Invalid run.
 
--- v is first in run, v' is last (counterclockwise rotation/run around graph)
--- vertex (min v v') is kept, while (max v v') is discarded.
-mergeVertices :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
-mergeVertices xss (g, lp) v v' a =
+-- Edges of v are followed by edges of v' in counterclockwise direction.
+-- Vertex id (min v v') is kept, while (max v v') is discarded.
+mergeVertices :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
+mergeVertices xss (g, hvs, lp) v v' a =
   do
     let iss = case (cornerList g v, cornerList g v') of
           ((Corner Unknown e1 ia e2):cs, (Corner Unknown e1' ia' e2'):cs') ->
-            ((Corner Unknown e1' ia' e2'):cs') ++ ((Corner a e1 ia e2):cs)
+            (Corner Unknown e1 ia e2):cs ++ (Corner a e1' ia' e2'):cs'
           _ -> error "Merging vertices must be incomplete."
-    guard $ isVertexValid xss iss -- Backtrack if merged vertex can never be completed.
+    guard $ (v, CounterClockwise) `notMember` hvs
+    guard $ (v', Clockwise) `notMember` hvs
     let (vKeep, vDiscard) = (min v v', max v v') -- Choose to keep least vertex index.
+    let hvs' = Set.map (\(w, o) -> (if w == vDiscard then vKeep else w, o)) hvs
+    let halfVertices' = Set.map fst hvs'
+    guard $ if vKeep `member` halfVertices' then isVertexValidHalfVertex xss iss else isVertexValid xss iss -- Backtrack if merged vertex can never be completed.
     let iss' = completeVertex iss
     let g' = Map.map (map $ renameVertex vDiscard vKeep) $ insert vKeep iss' $ delete vDiscard g
-    completeRuns xss (g', lp) -- There might be completable runs.
+    completeRuns xss (g', hvs', lp) -- There might be completable runs.
   where
     renameVertex :: Vertex -> Vertex -> Corner -> Corner
     renameVertex w w' (Corner ea (s1, z1) ia (s2, z2)) =
@@ -262,7 +263,6 @@ pickIncompleteVertex g xss hv =
                        let bends = runBends run,
                        length bends == 1,
                        let (x, y) = runEnds run,
-                       -- let w = leastVertexAlongRun run,
                        let w = if numberOfVerticesAlongRun run == 4 then leastVertexAlongRun run else min x y,
                        v <- [x, y],
                        v `member` halfVertices,
@@ -305,16 +305,18 @@ backtrack :: [Type] -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, Set HalfI
 backtrack compatibleTypes xss (g, hv, lp) =
   do -- Situation: We will have to add another tile.
     guard $ all (\(T tname _ tlp) -> if affineSubspace lp `subset` affineSubspace (fromRationalConvexPolytope tlp) then traceShow ("found type", tname) False else True) compatibleTypes
-    let incompleteVertex = pickIncompleteVertex g xss hv
+    let v = pickIncompleteVertex g xss hv
+    (direction, hv'') <- if isVertexValidHalfVertex xss (cornerList g v)
+      then [(id, hv), (Tuple.swap, Set.insert (v, CounterClockwise) hv)]
+      else [(id, hv)]
+    orientation <- [CounterClockwise, Clockwise] -- Pick orientation of new pentagon.
     let maxVertexId = fst $ Map.findMax g -- initial 5.
-    direction <- if isVertexValidHalfVertex xss (cornerList g incompleteVertex) then [id, Tuple.swap] else [id]
-    orientation <- orientations -- Pick direction of new pentagon.
     let anotherTile = pentagonGraph maxVertexId orientation
     let disconnectedGraph = Map.unionWith (\_ _ -> error "Vertex collision!") g anotherTile
     corner <- interiorAngles
     let cornerVertexId = fst $ fromJust $ minWhere (\(_, cs) -> any (\c -> interiorAngle c == corner) cs) anotherTile
-    let (v1, v2) = direction (cornerVertexId, incompleteVertex)
-    (g', hv', lp') <- mergeVertices xss (disconnectedGraph, lp) v1 v2 Zero
+    let (v1, v2) = direction (v, cornerVertexId)
+    (g', hv', lp') <- mergeVertices xss (disconnectedGraph, hv'', lp) v1 v2 Zero
     -- All possible completions will be handled inside 'mergeVertices'.
     let ls = approximateLengths lp'
     (g', lp', ls) : backtrack compatibleTypes xss (g', hv', lp')
@@ -347,7 +349,7 @@ exhaustiveSearch xs alpha =
     Nothing -> []
     Just lp' -> backtrack compatibleTypes xss (g, empty, lp')
 
-pentagonGraph :: Vertex -> Orientation -> TilingGraph
+pentagonGraph :: Vertex -> Direction -> TilingGraph
 pentagonGraph w orientation =
   fromList [(i + w, offsetCorner <$> corner i) | i <- [1..5]]
   where
@@ -362,7 +364,7 @@ pentagonGraph w orientation =
     corner :: Integer -> [Corner]
     corner n = case orientation of
       CounterClockwise -> [Corner Unknown (toLength (next n), next n) (toAngle n) (toLength n, prev n)]
-      ClockWise -> [Corner Unknown (toLength n, prev n) (toAngle n) (toLength (next n), next n)]
+      Clockwise -> [Corner Unknown (toLength n, prev n) (toAngle n) (toLength (next n), next n)]
     offsetCorner :: Corner -> Corner
     offsetCorner (Corner ea (l1, v1) ia (l2, v2)) = (Corner ea (l1, v1 + w) ia (l2, v2 + w))
 
