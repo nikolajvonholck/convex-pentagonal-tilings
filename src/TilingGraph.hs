@@ -11,7 +11,7 @@ import Utils ((!), minBy)
 import JSON
 
 import qualified Data.Set as Set
-import Data.Set (Set, empty, member, notMember, elems)
+import Data.Set (Set, empty, member, notMember, elems, union, size)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, insert, delete, fromList)
 import Data.Maybe (fromJust)
@@ -49,7 +49,8 @@ interiorAngles = [AngleA, AngleB, AngleC, AngleD, AngleE]
 -- Map from Vertex to list of pentagon corners listed in counterclockwise
 -- rotation around the vertex. We maintain the invariant that a vertex has at
 -- most one unknown exterior angle and it must be the first angle.
-type TilingGraph = Map Vertex [Corner]
+type VertexInfo = (Set Direction, [Corner])
+type TilingGraph = Map Vertex VertexInfo
 
 isVertexComplete :: [Corner] -> Bool
 isVertexComplete ((Corner Unknown _ _ _):_) = False
@@ -58,8 +59,11 @@ isVertexComplete _ = True
 vertexType :: [Corner] -> VertexType
 vertexType cs = [genericLength $ filter (\c -> interiorAngle c == a) cs | a <- interiorAngles]
 
+vertexInfo :: TilingGraph -> Vertex -> VertexInfo
+vertexInfo g v = fromJust $ Map.lookup v g
+
 cornerList :: TilingGraph -> Vertex -> [Corner]
-cornerList g v = fromJust $ Map.lookup v g
+cornerList g v = snd $ vertexInfo g v
 
 wrappedCornerList :: TilingGraph -> Vertex -> [Corner]
 wrappedCornerList g v = let cs = cornerList g v in cs ++ [head cs]
@@ -76,28 +80,26 @@ cornerAfter g v i = helper $ wrappedCornerList g v
 lengthCounts :: [Length] -> Vector Integer
 lengthCounts ll = [genericLength $ filter (l==) ll | l <- lengths]
 
-isVertexValidHalfVertex :: (VertexTypeSet, VertexTypeSet) -> [Corner] -> Bool
-isVertexValidHalfVertex (_, xs) cs =
-  let vt = vertexType cs
-  in if isVertexComplete cs
-    then vt `member` xs
-    else 0 < Set.size (compatibleVertexTypes xs vt)
+piAngles :: [Corner] -> Int
+piAngles cs = length (filter (\c -> exteriorAngle c == Pi) cs)
 
-isVertexValid :: (VertexTypeSet, VertexTypeSet) -> [Corner] -> Bool
-isVertexValid xss cs =
-  let pis = length (filter (\c -> exteriorAngle c == Pi) cs)
-      vt = vertexType cs
-      xs = case pis of
-        0 -> fst xss
-        1 -> snd xss
-        _ -> error "Impossible: Multiple π angles!"
-  in if isVertexComplete cs
-    then vt `member` xs
-    else 0 < Set.size (compatibleVertexTypes xs vt)
+isHalfVertex :: VertexInfo -> Bool
+isHalfVertex (hds, cs) = 0 < piAngles cs + size hds
+
+isValidVertex :: (VertexTypeSet, VertexTypeSet) -> VertexInfo -> Bool
+isValidVertex xss (hds, cs) =
+  let vt = vertexType cs
+  in case piAngles cs + size hds of
+      0 -> isCompatibleWith (fst xss) vt -- Must be completed as either half or full.
+      1 -> isCompatibleWith (snd xss) vt -- Must be completed as half vertex.
+      _ -> False -- Vertex can not be half along multiple lines.
 
 compatibleVertexTypes :: VertexTypeSet -> VertexType -> VertexTypeSet
 compatibleVertexTypes xs vt =
   Set.filter (\x -> all (\(v, w) -> v <= w) $ zip vt x) xs
+
+isCompatibleWith :: VertexTypeSet -> VertexType -> Bool
+isCompatibleWith xs x = 0 < Set.size (compatibleVertexTypes xs x)
 
 -- Runs counterclockwise in the sense that:
 --  - Outermost vertex is clockwise end.
@@ -133,7 +135,7 @@ runLengths (R _ a e) = case e of
 
 exteriorRuns :: TilingGraph -> [Run]
 exteriorRuns g =
-  let (v, cs) = fromJust $ minWhere (not . isVertexComplete . snd) g
+  let (v, (_, cs)) = fromJust $ minWhere (not . isVertexComplete . snd . snd) g
       (Corner _ (l, v') _ _) = head cs
       tour = R v Unknown (Just (Edge l (exteriorTour v v v')))
   in partitionTour tour
@@ -165,74 +167,73 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
-type HalfInDirection = (Vertex, Direction)
-
-completeRuns :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
-completeRuns xss (g, hvs, lp) = completeRuns' hvs $ exteriorRuns g
+completeRuns :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+completeRuns xss (g'', lp) = completeRuns' g'' $ exteriorRuns g''
   where
-    completeRuns' :: Set HalfInDirection -> [Run] -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
-    completeRuns' hvs' [] = [(g, hvs', lp)]
-    completeRuns' hvs' (r:rs) =
+    completeRuns' :: TilingGraph -> [Run] -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+    completeRuns' g [] = [(g, lp)]
+    completeRuns' g (r:rs) =
       let (x, y) = runEnds r
       in case map lengthCounts $ runLengths r of
-        [_] -> completeRuns' hvs' rs -- No bends to check. Skip this run.
+        [_] -> completeRuns' g rs -- No bends to check. Skip this run.
         [la, lb] ->
           let cs = asAlgNum $ la |-| lb -- la < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
             (Just _, Nothing, Nothing) ->
               do
-                guard $ isVertexValidHalfVertex xss (cornerList g x)
-                let hv = (x, Clockwise)
-                guard $ (x, CounterClockwise) `notMember` hvs'
-                completeRuns' (Set.insert hv hvs') rs
-            (Nothing, Just _, Nothing) -> mergeVertices xss (g, hvs', lp) y x Zero
+                let (hdsx, csx) = vertexInfo g x
+                let vix' = (Set.insert Clockwise hdsx, csx)
+                guard $ isValidVertex xss vix'
+                completeRuns' (Map.insert x vix' g) rs
+            (Nothing, Just _, Nothing) -> mergeVertices xss (g, lp) y x Zero
             (Nothing, Nothing, Just _) ->
               do
-                guard $ isVertexValidHalfVertex xss (cornerList g y)
-                let hv = (y, CounterClockwise)
-                guard $ (y, Clockwise) `notMember` hvs'
-                completeRuns' (Set.insert hv hvs') rs
+                let (hdsy, csy) = vertexInfo g y
+                let viy' = (Set.insert CounterClockwise hdsy, csy)
+                guard $ isValidVertex xss viy'
+                completeRuns' (Map.insert y viy' g) rs
             (lpleq, lpeq, lpgeq) -> -- Decide run.
               case sequence [lpleq, lpeq, lpgeq] of
                 Nothing -> error "Impossible: There should always be an option"
-                Just lps' -> do lp' <- lps'; completeRuns xss (g, hvs', lp')
+                Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
         [la, lb, lc] ->
           let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0)) of
             (Just _, Nothing) ->
               do
-                guard $ isVertexValidHalfVertex xss (cornerList g x)
-                guard $ isVertexValidHalfVertex xss (cornerList g y)
-                let hvx = (x, Clockwise)
-                let hvy = (y, CounterClockwise)
-                guard $ (x, CounterClockwise) `notMember` hvs'
-                guard $ (y, Clockwise) `notMember` hvs'
-                completeRuns' (Set.insert hvy $ Set.insert hvx hvs') rs
-            (Nothing, Just _) -> mergeVertices xss (g, hvs', lp) y x Pi
+                let (hdsx, csx) = vertexInfo g x
+                let (hdsy, csy) = vertexInfo g y
+                let vix' = (Set.insert Clockwise hdsx, csx)
+                let viy' = (Set.insert CounterClockwise hdsy, csy)
+                guard $ isValidVertex xss vix'
+                guard $ isValidVertex xss viy'
+                let g' = Map.insert y viy' $ Map.insert x vix' g
+                completeRuns' g' rs
+            (Nothing, Just _) -> mergeVertices xss (g, lp) y x Pi
             (lpleq, lpeq) -> -- Decide run.
               case sequence [lpleq, lpeq] of
                 Nothing -> [] -- Backtrack: Violation of triangle inequality.
-                Just lps' -> do lp' <- lps'; completeRuns xss (g, hvs', lp')
+                Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
         _ -> [] -- Backtrack: Invalid run.
 
 -- Edges of v are followed by edges of v' in counterclockwise direction.
 -- Vertex id (min v v') is kept, while (max v v') is discarded.
-mergeVertices :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber)]
-mergeVertices xss (g, hvs, lp) v v' a =
+mergeVertices :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+mergeVertices xss (g, lp) v v' a =
   do
-    let iss = case (cornerList g v, cornerList g v') of
-          ((Corner Unknown e1 ia e2):cs, (Corner Unknown e1' ia' e2'):cs') ->
-            (Corner Unknown e1 ia e2):cs ++ (Corner a e1' ia' e2'):cs'
+    let (hds, cs) = vertexInfo g v
+    let (hds', cs') = vertexInfo g v'
+    let cs'' = case (cs, cs') of
+          ((Corner Unknown e1 ia e2):cst, (Corner Unknown e1' ia' e2'):cst') ->
+            (Corner Unknown e1 ia e2):cst ++ (Corner a e1' ia' e2'):cst'
           _ -> error "Merging vertices must be incomplete."
-    guard $ (v, CounterClockwise) `notMember` hvs
-    guard $ (v', Clockwise) `notMember` hvs
+    guard $ a == Pi || (CounterClockwise `notMember` hds && Clockwise `notMember` hds')
     let (vKeep, vDiscard) = (min v v', max v v') -- Choose to keep least vertex index.
-    let hvs' = Set.map (\(w, o) -> (if w == vDiscard then vKeep else w, o)) hvs
-    let halfVertices' = Set.map fst hvs'
-    guard $ if vKeep `member` halfVertices' then isVertexValidHalfVertex xss iss else isVertexValid xss iss -- Backtrack if merged vertex can never be completed.
-    let iss' = completeVertex iss
-    let g' = Map.map (map $ renameVertex vDiscard vKeep) $ insert vKeep iss' $ delete vDiscard g
-    completeRuns xss (g', hvs', lp) -- There might be completable runs.
+    let hds'' = Set.delete CounterClockwise hds `union` Set.delete Clockwise hds'
+    guard $ isValidVertex xss (hds'', cs'') -- Backtrack if merged vertex can never be completed.
+    let vi' = completeVertex (hds'', cs'') -- Attempt to complete vertex. Might return unaltered vertex info.
+    let g' = Map.map (\(h, c) -> (h, map (renameVertex vDiscard vKeep) c)) $ insert vKeep vi' $ delete vDiscard g
+    completeRuns xss (g', lp) -- There might be completable runs.
   where
     renameVertex :: Vertex -> Vertex -> Corner -> Corner
     renameVertex w w' (Corner ea (s1, z1) ia (s2, z2)) =
@@ -240,22 +241,22 @@ mergeVertices xss (g, hvs, lp) v v' a =
       in Corner ea (s1, swap z1) ia (s2, swap z2)
 
     -- Returns corner list, completed if possible.
-    completeVertex :: [Corner] -> [Corner]
-    completeVertex (css@((Corner Unknown e1 ia e2):is)) =
-      let vt = vertexType css
-          ea = if vt `member` snd xss then
-                  case length (filter (\c -> exteriorAngle c == Pi) css) of
-                    0 -> Pi
-                    1 -> Zero
-                    _ -> error "Impossible: Multiple π angles!"
-                else if vt `member` fst xss then Zero
-                else Unknown
-      in (Corner ea e1 ia e2):is
-    completeVertex css = css
+    completeVertex :: VertexInfo -> VertexInfo
+    completeVertex (hds, (cs@((Corner Unknown e1 ia e2):cst))) =
+      let vt = vertexType cs
+          (hds', ea) = if vt `member` snd xss then -- Can be completed as half vertex, so we do that.
+                  case piAngles cs of
+                    0 -> (empty, Pi)
+                    1 -> (empty, Zero)
+                    _ -> error "Impossible: Multiple Pi angles!"
+                else if vt `member` fst xss then (empty, Zero) -- Can be completed as full vertex, so we do that alternatively.
+                else (hds, Unknown) -- No change is made.
+      in (hds', (Corner ea e1 ia e2):cst)
+    completeVertex _ = error "Impossible: Vertex is always incomplete."
 
-pickIncompleteVertex :: TilingGraph -> (VertexTypeSet, VertexTypeSet) -> Set HalfInDirection -> Vertex
-pickIncompleteVertex g xss hv =
-  let incompleteVertices = Map.keys $ Map.filter (not . isVertexComplete) g
+pickIncompleteVertex :: TilingGraph -> (VertexTypeSet, VertexTypeSet) -> Vertex
+pickIncompleteVertex g xss =
+  let incompleteVertices = Map.keys $ Map.filter (not . isVertexComplete . snd) g
       runs = exteriorRuns g
       weighted =
         [(v, v) | v <- incompleteVertices] ++
@@ -265,28 +266,26 @@ pickIncompleteVertex g xss hv =
                        let (x, y) = runEnds run,
                        let w = if numberOfVerticesAlongRun run == 3 then leastVertexAlongRun run else min x y,
                        v <- [x, y],
-                       v `member` halfVertices,
-                       v `elem` incompleteVertices] ++
+                       v `elem` incompleteVertices,
+                       isHalfVertex $ vertexInfo g v] ++
         [(v, w) | run <- runs,
                        let bends = runBends run,
                        length bends == 2,
                        let w = leastVertexAlongRun run,
                        let (x, y) = runEnds run,
                        v <- [x, y],
-                       v `member` halfVertices,
-                       v `elem` incompleteVertices]
+                       v `elem` incompleteVertices,
+                       isHalfVertex $ vertexInfo g v]
       ranked = fst <$> sortOn snd weighted
       topFive = take (max 15 (length ranked `div` 2)) ranked -- keep focus.
       weighted' = [(v, w) | v <- topFive, let w = vertexScore v]
   in fst $ minBy snd weighted'
   where
-    halfVertices :: Set Vertex
-    halfVertices = Set.map fst hv
-
     vertexScore :: Vertex -> Integer
     vertexScore v =
-      let vt = vertexType (cornerList g v)
-          xs = if v `member` halfVertices then snd xss else fst xss
+      let (hds, cs) = vertexInfo g v
+          vt = vertexType cs
+          xs = if isHalfVertex (hds, cs) then snd xss else fst xss
           vts = compatibleVertexTypes xs vt
           vts' = [sum (vt' |-| vt) | vt' <- elems vts]
       in genericLength vts' * maximum vts'
@@ -301,25 +300,31 @@ pickIncompleteVertex g xss hv =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: [Type] -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, Set HalfInDirection, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
-backtrack compatibleTypes xss (g, hv, lp) =
+backtrack :: [Type] -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
+backtrack compatibleTypes xss (g, lp) =
   do -- Situation: We will have to add another tile.
     guard $ all (\(T tname _ tlp) -> if affineSubspace lp `subset` affineSubspace (fromRationalConvexPolytope tlp) then traceShow ("found type", tname) False else True) compatibleTypes
-    let v = pickIncompleteVertex g xss hv
-    (direction, hv'') <- if isVertexValidHalfVertex xss (cornerList g v)
-      then [(id, hv), (Tuple.swap, Set.insert (v, CounterClockwise) hv)]
-      else [(id, hv)]
+    let v = pickIncompleteVertex g xss
+    let (hds, cs) = fromJust $ Map.lookup v g
+    (direction, hds') <- if size hds > 1 then error "Invalid vertex!" else
+                         if Clockwise `member` hds then [(id, hds)]
+                         else if CounterClockwise `member` hds then [(Tuple.swap, hds)]
+                         else -- hds is empty
+                           if isCompatibleWith (snd xss) (vertexType cs) && piAngles cs == 0 -- Check if might become half vertex.
+                              then [(id, hds), (Tuple.swap, Set.insert CounterClockwise hds)]
+                              else [(id, hds)]
+    let g'' = Map.insert v (hds', cs) g -- Update half vertex status of v.
     orientation <- [CounterClockwise, Clockwise] -- Pick orientation of new pentagon.
-    let maxVertexId = fst $ Map.findMax g -- initial 5.
+    let maxVertexId = fst $ Map.findMax g'' -- initial 5.
     let anotherTile = pentagonGraph maxVertexId orientation
-    let disconnectedGraph = Map.unionWith (\_ _ -> error "Vertex collision!") g anotherTile
+    let disconnectedGraph = Map.unionWith (\_ _ -> error "Vertex id collision!") g'' anotherTile
     corner <- interiorAngles
-    let cornerVertexId = fst $ fromJust $ minWhere (\(_, cs) -> any (\c -> interiorAngle c == corner) cs) anotherTile
+    let cornerVertexId = fst $ fromJust $ minWhere (\(_, (_, cs')) -> any (\c -> interiorAngle c == corner) cs') anotherTile
     let (v1, v2) = direction (v, cornerVertexId)
-    (g', hv', lp') <- mergeVertices xss (disconnectedGraph, hv'', lp) v1 v2 Zero
+    (g', lp') <- mergeVertices xss (disconnectedGraph, lp) v1 v2 Zero
     -- All possible completions will be handled inside 'mergeVertices'.
     let ls = approximateLengths lp'
-    (g', lp', ls) : backtrack compatibleTypes xss (g', hv', lp')
+    (g', lp', ls) : backtrack compatibleTypes xss (g', lp')
 
 halfVertexTypes :: VertexTypeSet -> VertexTypeSet
 halfVertexTypes xs =
@@ -347,11 +352,11 @@ exhaustiveSearch xs alpha =
       xss = (xs, halfVertexTypes xs)
   in case traceShow (xs, alpha, s, [name | T name _ _ <- compatibleTypes]) lp of
     Nothing -> []
-    Just lp' -> backtrack compatibleTypes xss (g, empty, lp')
+    Just lp' -> backtrack compatibleTypes xss (g, lp')
 
 pentagonGraph :: Vertex -> Direction -> TilingGraph
 pentagonGraph w orientation =
-  fromList [(i + w, offsetCorner <$> corner i) | i <- [1..5]]
+  fromList [(i + w, (empty, offsetCorner <$> corner i)) | i <- [1..5]]
   where
     prev :: Integer -> Integer
     prev n = if n == 1 then 5 else n - 1

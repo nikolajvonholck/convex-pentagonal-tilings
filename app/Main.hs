@@ -112,7 +112,7 @@ makeResponder lists i k =
           approxAlpha = map fromRational alpha :: [Double]
           approxLengths = map fromRational ls :: [Double]
       in jsonObject [
-        ("graph", toJSON g),
+        ("graph", toJSON (Map.map snd g)),
         ("linearProgram", toJSON lp),
         ("lengths", toJSON approxLengths),
         ("angles", toJSON approxAlpha)
