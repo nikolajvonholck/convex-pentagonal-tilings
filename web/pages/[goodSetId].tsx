@@ -44,9 +44,9 @@ const Page: NextPage<PageProps> = ({ goodSetId }) => {
         <title>Convex Pentagonal Tilings</title>
       </Head>
       <div className={styles.sidebar}>
-        <div className={styles.section}>Good subset: {goodSetId}</div>
+        <div className={styles.section}>Good set: {goodSetId}</div>
         <div className={styles.section}>
-          <div>Iteration: {iteration}</div>
+          <div>Iteration:</div>
           <input
             type='text'
             onChange={(e) => setIteration(+e.target.value)}

@@ -8,7 +8,7 @@ type Response = {
 }
 
 const useIteration = (
-  goodSubsetId: number,
+  goodSetId: number,
   iteration: number
 ): [Response | undefined, boolean, Error | undefined] => {
   const [response, setResponse] = useState<Response | undefined>(undefined)
@@ -22,7 +22,7 @@ const useIteration = (
       setError(undefined)
       try {
         const response = await fetch(
-          `http://localhost:3333/${goodSubsetId}/${iteration}`
+          `http://localhost:3333/${goodSetId}/${iteration}`
         )
         const json = await response.json()
         if (!ignore) {
@@ -41,7 +41,7 @@ const useIteration = (
     return () => {
       ignore = true
     }
-  }, [goodSubsetId, iteration])
+  }, [goodSetId, iteration])
 
   return [response, isLoading, error]
 }
