@@ -263,7 +263,7 @@ pickIncompleteVertex g xss hv =
                        let bends = runBends run,
                        length bends == 1,
                        let (x, y) = runEnds run,
-                       let w = if numberOfVerticesAlongRun run == 4 then leastVertexAlongRun run else min x y,
+                       let w = if numberOfVerticesAlongRun run == 3 then leastVertexAlongRun run else min x y,
                        v <- [x, y],
                        v `member` halfVertices,
                        v `elem` incompleteVertices] ++
@@ -276,7 +276,7 @@ pickIncompleteVertex g xss hv =
                        v `member` halfVertices,
                        v `elem` incompleteVertices]
       ranked = fst <$> sortOn snd weighted
-      topFive = take (min 5 $ length ranked) ranked -- keep focus.
+      topFive = take (max 15 (length ranked `div` 2)) ranked -- keep focus.
       weighted' = [(v, w) | v <- topFive, let w = vertexScore v]
   in fst $ minBy snd weighted'
   where
