@@ -87,6 +87,7 @@ addColumn ms v = [row ++ [x] | (row, x) <- zipPedantic ms v]
 
 -- Given a list of vectors, check whether the given vector is in their span.
 inSpan :: (Fractional a, Eq a) => [Vector a] -> Vector a -> Bool
+inSpan [] b = isZero b
 inSpan vs b =
   let as = transpose vs -- Consider vectors of span as columns in a matrix.
       ms = addColumn as b
