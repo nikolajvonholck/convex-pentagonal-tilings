@@ -14,7 +14,7 @@ import qualified Data.Set as Set
 import Data.Set (Set, empty, member, notMember, elems, union, size)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, insert, delete, fromList)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, catMaybes)
 import Data.List (find, genericTake, genericLength, sortOn)
 import Control.Monad (guard, foldM)
 import qualified Data.Tuple as Tuple
@@ -294,18 +294,20 @@ pickIncompleteVertex g xss =
     numberOfVerticesAlongRun (R _ _ Nothing) = 1
     numberOfVerticesAlongRun (R _ _ (Just (Edge _ r))) = 1 + numberOfVerticesAlongRun r
 
+type ConstructedType = (Type, ConvexPolytope AlgebraicNumber)
+
 -- Assumes all possible completions performed.
 -- Assumptions:
 --  • lp is non-empty (this is ensured by type system and ConvexPolytope impl)
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: [Type] -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
-backtrack compatibleTypes xss (g, lp) =
+backtrack :: [ConstructedType] -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
+backtrack constructableCompatibleTypes xss (g, lp) =
   do -- Situation: We will have to add another tile.
-    guard $ all (\(T tname _ tlp) -> if affineSubspace lp `subset` affineSubspace (fromRationalConvexPolytope tlp) then traceShow ("found type", tname) False else True) compatibleTypes
+    guard $ all (\(T tname _ _, clp) -> if affineSubspace lp `subset` affineSubspace clp then traceShow ("Found " ++ tname) False else True) constructableCompatibleTypes
     let v = pickIncompleteVertex g xss
-    let (hds, cs) = fromJust $ Map.lookup v g
+    let (hds, cs) = vertexInfo g v
     (direction, hds') <- if size hds > 1 then error "Invalid vertex!" else
                          if Clockwise `member` hds then [(id, hds)]
                          else if CounterClockwise `member` hds then [(Tuple.swap, hds)]
@@ -324,7 +326,7 @@ backtrack compatibleTypes xss (g, lp) =
     (g', lp') <- mergeVertices xss (disconnectedGraph, lp) v1 v2 Zero
     -- All possible completions will be handled inside 'mergeVertices'.
     let ls = approximateLengths lp'
-    (g', lp', ls) : backtrack compatibleTypes xss (g', lp')
+    (g', lp', ls) : backtrack constructableCompatibleTypes xss (g', lp')
 
 halfVertexTypes :: VertexTypeSet -> VertexTypeSet
 halfVertexTypes xs =
@@ -334,12 +336,16 @@ halfVertexTypes xs =
 exhaustiveSearch :: VertexTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)])
 exhaustiveSearch xs alpha =
   let s = angleSum (traceShow alpha alpha)
-      compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
       (ps, q) = commonDenominator s
       r = cosineFieldExtension q
       sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
       cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
       g = pentagonGraph 0 CounterClockwise
+      compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
+      constructType t@(T _ _ tlp) = do
+        clp <- foldM projectOntoHyperplane (fromRationalConvexPolytope tlp) [sineConstraint, cosineConstraint]
+        return (t, clp)
+      constructableCompatibleTypes = catMaybes $ map constructType compatibleTypes
       lp = do
         ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1), sineConstraint, cosineConstraint]
         boundedConvexPolytope Strict ass [
@@ -350,9 +356,9 @@ exhaustiveSearch xs alpha =
             constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
           ] -- (0, 1)^5
       xss = (xs, halfVertexTypes xs)
-  in case traceShow (xs, alpha, s, [name | T name _ _ <- compatibleTypes]) lp of
+  in case traceShow (xs, alpha, s, [name | (T name _ _, _) <- constructableCompatibleTypes]) lp of
     Nothing -> []
-    Just lp' -> backtrack compatibleTypes xss (g, lp')
+    Just lp' -> backtrack constructableCompatibleTypes xss (g, lp')
 
 pentagonGraph :: Vertex -> Direction -> TilingGraph
 pentagonGraph w orientation =
