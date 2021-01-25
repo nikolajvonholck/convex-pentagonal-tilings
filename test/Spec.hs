@@ -6,6 +6,7 @@ import IntervalTests (intervalTests)
 import MatrixTests (matrixTests)
 import PolynomialTests (polynomialTests)
 import SimplexTests (simplexTests)
+import TrigonometryTests (trigonometryTests)
 
 import Test.Tasty
 
@@ -19,5 +20,6 @@ tests = testGroup "tests" [
     intervalTests,
     matrixTests,
     polynomialTests,
-    simplexTests
+    simplexTests,
+    trigonometryTests
   ]

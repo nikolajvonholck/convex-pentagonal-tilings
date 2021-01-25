@@ -1,4 +1,4 @@
-module Interval (Interval, begin, end, fromElement, interval, leastContainingInterval, isElementOf, extendWith, width, midpoint) where
+module Interval (Interval, begin, end, fromElement, interval, leastContainingInterval, isElementOf, isElementOfInterior, extendWith, width, midpoint, offset) where
 
 -- import Data.Ord (min, max)
 
@@ -21,14 +21,20 @@ interval (a, b)
 leastContainingInterval :: Ord a => Interval a -> Interval a -> Interval a
 leastContainingInterval (I (a1, b1)) (I (a2, b2)) = I (min a1 a2, max b1 b2)
 
-isElementOf :: (Num a, Ord a) => Interval a -> a -> Bool
-isElementOf (I (a, b)) x = a <= x && x <= b
+isElementOf :: (Num a, Ord a) => a -> Interval a -> Bool
+isElementOf x (I (a, b)) = a <= x && x <= b
 
-extendWith :: Ord a => Interval a -> a -> Interval a
-extendWith i x = leastContainingInterval i $ fromElement x
+isElementOfInterior :: (Num a, Ord a) => a -> Interval a -> Bool
+isElementOfInterior x (I (a, b)) = a < x && x < b
+
+extendWith :: Ord a => a -> Interval a -> Interval a
+extendWith x i = leastContainingInterval i $ fromElement x
 
 width :: Num a => Interval a -> a
 width (I (a, b)) = b - a
 
 midpoint :: Fractional a => Interval a -> a
 midpoint (I (a, b)) = (a + b) / 2
+
+offset :: (Num a, Ord a) => a -> Interval a -> Interval a
+offset x (I (a, b)) = interval (a + x, b + x)
