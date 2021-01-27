@@ -1,21 +1,23 @@
 module TilingGraph (TilingGraph, exhaustiveSearch) where
 
-import Vector (Vector, zero, (|+|), (|-|), (|*|))
+import Vector (Vector, (|+|), (|-|), (|*|))
+import Interval (Interval, interval, begin, end, midpoint, width)
 import GoodSet (VertexType, VertexTypeSet)
-import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space, subset)
-import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, fromRationalConvexPolytope, affineSubspace)
+import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space, subset, dimension, coordsInSpace)
+import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, localExtremePoints, fromRationalConvexPolytope, affineSubspace)
 import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
+import Trigonometry (cosBound', sinBound')
 import ChebyshevPolynomial (commonDenominator, cosineFieldExtension, sinePoly, cosinePoly)
 import Type (Type(..), knownTypes)
-import Utils ((!), minBy)
+import Utils ((!), minBy, maxBy, enumerate, replaceAt, zipPedantic)
 import JSON
 
 import qualified Data.Set as Set
 import Data.Set (Set, empty, member, notMember, elems, union, size)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, insert, delete, fromList)
-import Data.Maybe (fromJust, catMaybes)
-import Data.List (find, genericTake, genericLength, sortOn)
+import Data.Maybe (fromJust, maybeToList, listToMaybe)
+import Data.List (find, genericTake, genericLength, sortOn, transpose)
 import Control.Monad (guard, foldM)
 import qualified Data.Tuple as Tuple
 
@@ -28,8 +30,8 @@ data ExteriorAngle = Unknown | Zero | Pi deriving (Show, Eq)
 data Length = LengthA | LengthB | LengthC | LengthD | LengthE deriving (Show, Eq)
 data Direction = CounterClockwise | Clockwise deriving (Show, Eq, Ord)
 
-asAlgNum :: Vector Integer -> Vector AlgebraicNumber
-asAlgNum = map fromInteger
+asRational :: Vector Integer -> Vector Rational
+asRational = map fromInteger
 
 -- A corner of a pentagon is represented by giving the exterior angle, then the
 -- length to the first vertex, then the interior angle and lastly the length to
@@ -167,17 +169,17 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
-completeRuns :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+completeRuns :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
 completeRuns xss (g'', lp) = completeRuns' g'' $ exteriorRuns g''
   where
-    completeRuns' :: TilingGraph -> [Run] -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+    completeRuns' :: TilingGraph -> [Run] -> [(TilingGraph, ConvexPolytope Rational)]
     completeRuns' g [] = [(g, lp)]
     completeRuns' g (r:rs) =
       let (x, y) = runEnds r
       in case map lengthCounts $ runLengths r of
         [_] -> completeRuns' g rs -- No bends to check. Skip this run.
         [la, lb] ->
-          let cs = asAlgNum $ la |-| lb -- la < lb
+          let cs = asRational$ la |-| lb -- la < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
             (Just _, Nothing, Nothing) ->
               do
@@ -197,7 +199,7 @@ completeRuns xss (g'', lp) = completeRuns' g'' $ exteriorRuns g''
                 Nothing -> error "Impossible: There should always be an option"
                 Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
         [la, lb, lc] ->
-          let cs = asAlgNum $ (la |+| lc) |-| lb -- la + lc < lb
+          let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
           in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0)) of
             (Just _, Nothing) ->
               do
@@ -218,7 +220,7 @@ completeRuns xss (g'', lp) = completeRuns' g'' $ exteriorRuns g''
 
 -- Edges of v are followed by edges of v' in counterclockwise direction.
 -- Vertex id (min v v') is kept, while (max v v') is discarded.
-mergeVertices :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope AlgebraicNumber)]
+mergeVertices :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
 mergeVertices xss (g, lp) v v' a =
   do
     let (hds, cs) = vertexInfo g v
@@ -294,60 +296,53 @@ pickIncompleteVertex g xss =
     numberOfVerticesAlongRun (R _ _ Nothing) = 1
     numberOfVerticesAlongRun (R _ _ (Just (Edge _ r))) = 1 + numberOfVerticesAlongRun r
 
-type ConstructedType = (Type, ConvexPolytope AlgebraicNumber)
-
 -- Assumes all possible completions performed.
 -- Assumptions:
 --  • lp is non-empty (this is ensured by type system and ConvexPolytope impl)
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: [ConstructedType] -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope AlgebraicNumber) -> [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]
-backtrack constructableCompatibleTypes xss (g, lp) =
-  do -- Situation: We will have to add another tile.
-    guard $ all (\(T tname _ _, clp) -> if affineSubspace lp `subset` affineSubspace clp then traceShow ("Found " ++ tname) False else True) constructableCompatibleTypes
-    let v = pickIncompleteVertex g xss
-    let (hds, cs) = vertexInfo g v
-    (direction, hds') <- if size hds > 1 then error "Invalid vertex!" else
-                         if Clockwise `member` hds then [(id, hds)]
-                         else if CounterClockwise `member` hds then [(Tuple.swap, hds)]
-                         else -- hds is empty
-                           if isCompatibleWith (snd xss) (vertexType cs) && piAngles cs == 0 -- Check if might become half vertex.
-                              then [(id, hds), (Tuple.swap, Set.insert CounterClockwise hds)]
-                              else [(id, hds)]
-    let g'' = Map.insert v (hds', cs) g -- Update half vertex status of v.
-    orientation <- [CounterClockwise, Clockwise] -- Pick orientation of new pentagon.
-    let maxVertexId = fst $ Map.findMax g'' -- initial 5.
-    let anotherTile = pentagonGraph maxVertexId orientation
-    let disconnectedGraph = Map.unionWith (\_ _ -> error "Vertex id collision!") g'' anotherTile
-    corner <- interiorAngles
-    let cornerVertexId = fst $ fromJust $ minWhere (\(_, (_, cs')) -> any (\c -> interiorAngle c == corner) cs') anotherTile
-    let (v1, v2) = direction (v, cornerVertexId)
-    (g', lp') <- mergeVertices xss (disconnectedGraph, lp) v1 v2 Zero
-    -- All possible completions will be handled inside 'mergeVertices'.
-    let ls = approximateLengths lp'
-    (g', lp', ls) : backtrack constructableCompatibleTypes xss (g', lp')
+backtrack :: (ConvexPolytope Rational -> Bool) -> (ConvexPolytope Rational -> Maybe (Vector Rational, Vector Rational)) -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, (Vector Rational, Vector Rational))]
+backtrack isKnownType construct xss state = traceShow (xss) backtrack' state
+  where
+    backtrack' :: (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, (Vector Rational, Vector Rational))]
+    backtrack' (g, lp) = do
+      (as, ls) <- maybeToList $ construct lp
+      guard $ not $ isKnownType lp
+      -- Situation: We will have to add another tile.
+      let v = pickIncompleteVertex g xss
+      let (hds, cs) = vertexInfo g v
+      (direction, hds') <- if size hds > 1 then error "Invalid vertex!" else
+                           if Clockwise `member` hds then [(id, hds)]
+                           else if CounterClockwise `member` hds then [(Tuple.swap, hds)]
+                           else -- hds is empty
+                             if isCompatibleWith (snd xss) (vertexType cs) && piAngles cs == 0 -- Check if might become half vertex.
+                                then [(id, hds), (Tuple.swap, Set.insert CounterClockwise hds)]
+                                else [(id, hds)]
+      let g'' = Map.insert v (hds', cs) g -- Update half vertex status of v.
+      orientation <- [CounterClockwise, Clockwise] -- Pick orientation of new pentagon.
+      let maxVertexId = fst $ Map.findMax g'' -- initial 5.
+      let anotherTile = pentagonGraph maxVertexId orientation
+      let disconnectedGraph = Map.unionWith (\_ _ -> error "Vertex id collision!") g'' anotherTile
+      corner <- interiorAngles
+      let cornerVertexId = fst $ fromJust $ minWhere (\(_, (_, cs')) -> any (\c -> interiorAngle c == corner) cs') anotherTile
+      let (v1, v2) = direction (v, cornerVertexId)
+      -- All possible completions will be handled inside 'mergeVertices'.
+      (g', lp') <- mergeVertices xss (disconnectedGraph, lp) v1 v2 Zero
+      (g, lp, (as, ls)) : backtrack' (g', lp')
 
 halfVertexTypes :: VertexTypeSet -> VertexTypeSet
 halfVertexTypes xs =
   let withEvenValues = Set.filter (\x -> all (\v -> v `mod` 2 == 0) x) xs
   in Set.map (\x -> [v `div` 2 | v <- x]) withEvenValues
 
-exhaustiveSearch :: VertexTypeSet -> Vector Rational -> ([(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)])
-exhaustiveSearch xs alpha =
-  let s = angleSum (traceShow alpha alpha)
-      (ps, q) = commonDenominator s
-      r = cosineFieldExtension q
-      sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
-      cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
+exhaustiveSearch :: VertexTypeSet -> ConvexPolytope Rational -> ([(TilingGraph, ConvexPolytope Rational, (Vector Rational, Vector Rational))])
+exhaustiveSearch xs angleCP =
+  let compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
+      xss = traceShow xs (xs, halfVertexTypes xs)
       g = pentagonGraph 0 CounterClockwise
-      compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
-      constructType t@(T _ _ tlp) = do
-        clp <- foldM projectOntoHyperplane (fromRationalConvexPolytope tlp) [sineConstraint, cosineConstraint]
-        return (t, clp)
-      constructableCompatibleTypes = catMaybes $ map constructType compatibleTypes
-      lp = do
-        ass <- foldM intersectWithHyperPlane (space 5) [(HP [1, 1, 1, 1, 1] 1), sineConstraint, cosineConstraint]
+      lp = fromJust $ do
+        ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 1)
         boundedConvexPolytope Strict ass [
             constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
             constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
@@ -355,10 +350,77 @@ exhaustiveSearch xs alpha =
             constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
             constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
           ] -- (0, 1)^5
-      xss = (xs, halfVertexTypes xs)
-  in case traceShow (xs, alpha, s, [name | (T name _ _, _) <- constructableCompatibleTypes]) lp of
-    Nothing -> []
-    Just lp' -> backtrack constructableCompatibleTypes xss (g, lp')
+      (isKnownType', construct') =
+        if dimension (affineSubspace angleCP) == 0
+        then -- Decide on algebric field extension of the rationals.
+          let alpha = head $ elems $ extremePoints angleCP
+              s = angleSum (traceShow alpha alpha)
+              (ps, q) = commonDenominator s
+              r = cosineFieldExtension q
+              sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
+              cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
+              constructor lp' = foldM projectOntoHyperplane (fromRationalConvexPolytope lp') [sineConstraint, cosineConstraint]
+              constructableCompatibleTypes = [(t, clp) | t@(T _ _ tlp) <- compatibleTypes, clp <- maybeToList $ constructor tlp]
+              isKnownType lp' =
+                let alp' = fromJust $ constructor lp' -- Assumes constructible.
+                in any (\(T tname _ _, clp) -> if affineSubspace alp' `subset` affineSubspace clp then traceShow ("Found " ++ tname) True else False) constructableCompatibleTypes
+              construct lp' = do
+                clp <- constructor lp'
+                return (alpha, approximateLengths clp)
+          in traceShow ("Constructible known types:", [name | (T name _ _, _) <- constructableCompatibleTypes]) (isKnownType, construct)
+        else
+          let isKnownType lp' = any (\(T tname _ tlp) -> if affineSubspace lp' `subset` affineSubspace tlp then traceShow ("Found " ++ tname) True else False) compatibleTypes
+              initialSector = boundingBox (elems $ localExtremePoints angleCP)
+              construct lp' = listToMaybe $ constructSectors angleCP lp' initialSector
+          in (isKnownType, construct)
+  in backtrack isKnownType' construct' (traceShow [name | T name _ _ <- compatibleTypes] xss) (g, lp)
+
+type Sector = [Interval Rational]
+
+boundingBox :: (Ord a) => [Vector a] -> [Interval a]
+boundingBox vs =
+  let coordLists = transpose vs
+      (mins, maxs) = (minimum <$> coordLists, maximum <$> coordLists)
+  in interval <$> zipPedantic mins maxs
+
+constructSectors :: ConvexPolytope Rational -> ConvexPolytope Rational -> Sector -> [(Vector Rational, Vector Rational)]
+constructSectors angleCP lp sector = do
+    construction <- maybeToList $ constructSector sector
+    if maximum [width i | i <- sector] < sectorSize
+      then return construction -- Here we choose to not split sector further.
+      else splitSector sector >>= constructSectors angleCP lp
+  where
+    sectorSize :: Rational
+    sectorSize = 1/1024 -- TODO: Adjust.
+
+    splitSector :: Sector -> [Sector]
+    splitSector is =
+      let (k, i) = maxBy (width . snd) (enumerate is) -- Determine widest dimension.
+          m = midpoint i -- Split at midpoint.
+      in [replaceAt k i' is | i' <- [interval (begin i, m), interval (m, end i)]]
+
+    constructSector :: Sector -> Maybe (Vector Rational, Vector Rational)
+    constructSector sector' =
+      let bounds = sequence [[begin i, end i] | i <- sector']
+          angleBounds = coordsInSpace (affineSubspace angleCP) <$> bounds
+          angleBoundingBox = boundingBox angleBounds
+          angleSums = angleSum <$> angleBounds
+          angleSumBounds = boundingBox angleSums
+          sineBounds = sinBound' <$> angleSumBounds
+          cosineBounds = cosBound' <$> angleSumBounds
+          constraints = [
+              constraint (begin <$> cosineBounds) 0,
+              constraint ((negate . end) <$> cosineBounds) 0,
+              constraint (begin <$> sineBounds) 0,
+              constraint ((negate . end) <$> sineBounds) 0
+            ]
+          (mins, maxs) = (begin <$> angleBoundingBox, end <$> angleBoundingBox)
+      in do
+        guard $ all (<1) mins && all (0<) maxs -- TODO: Consider strict ineqs.
+        lp' <- foldM cutHalfSpace lp constraints
+        let as = averageVector angleBounds
+        let ls = averageVector (elems $ extremePoints lp')
+        return (as, ls)
 
 pentagonGraph :: Vertex -> Direction -> TilingGraph
 pentagonGraph w orientation =
@@ -386,10 +448,16 @@ angleSum as = [fromInteger i - 1 - (sum $ genericTake (i - 1) as) | i <- [1..5]]
 minWhere :: ((k, v) -> Bool) -> Map k v -> Maybe (k, v)
 minWhere p m = find p (Map.toAscList m)
 
+averageVector :: (Fractional a) => [Vector a] -> Vector a
+averageVector [] = error "Can not take average of empty list"
+averageVector vs =
+  let s = foldl1 (|+|) vs
+      k = genericLength vs
+  in (1 / (fromInteger k)) |*| s
+
 approximateLengths :: ConvexPolytope AlgebraicNumber -> Vector Rational
 approximateLengths lp =
-  let lengthsExtr = elems $ extremePoints lp
-  in map (approximate 0.00001) $ (1 / (fromInteger $ genericLength lengthsExtr)) |*| (foldl (|+|) (zero 5) lengthsExtr)
+  approximate 0.00001 <$> averageVector (elems $ extremePoints lp)
 
 instance JSON Corner where
   toJSON (Corner ea (l1, v1) ia (l2, v2)) =

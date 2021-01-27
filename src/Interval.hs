@@ -1,7 +1,5 @@
 module Interval (Interval, begin, end, fromElement, interval, leastContainingInterval, isElementOf, isElementOfInterior, extendWith, width, midpoint, offset) where
 
--- import Data.Ord (min, max)
-
 data Interval a = I (a, a) deriving (Eq, Show)
 
 begin :: Interval a -> a

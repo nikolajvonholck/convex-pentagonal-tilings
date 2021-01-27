@@ -204,5 +204,106 @@ types = [
         HP [0, 1, 0, -1, 0] 0, -- b = d
         HP [0, 0, 0, 1, -1] 0  -- d = e
       ]
+    ),
+    -- Special cases of known types.
+    ("Type 16", -- TODO: Check is of type 10
+      fromList [
+        [0, 1, 1, 0, 1], -- B + C + E = 2π
+        [0, 2, 0, 1, 0], -- 2B + D = 2π
+        [1, 0, 2, 0, 0]  -- A + 2C = 2π
+      ],
+      [
+        HP [0, 1, 0, -1, 0] 0, -- b = d
+        HP [0, 2, 0, 0, -1] 0, -- 2b = e
+        HP [1, 0, 0, 0, -1] 0  -- a = e
+      ]
+    ),
+    ("Type 17", -- TODO: Check is of type 2
+      fromList [
+        [0, 0, 1, 0, 2], -- C + 2E = 2π
+        [0, 2, 0, 1, 0]  -- 2B + D = 2π
+      ],
+      [
+        HP [1, -1, 0, 0, 0] 0, -- a = b
+        HP [0, 1, -1, 0, 0] 0, -- b = c
+        HP [0, 0, 1, -1, 0] 0, -- c = d
+        HP [0, 0, 0, 1, -1] 0  -- d = e
+      ]
+    ),
+    ("Type 18", -- TODO: Check is of type 2
+      fromList [
+        [0, 0, 0, 1, 2], -- D + 2E = 2π
+        [0, 0, 1, 0, 2], -- C + 2E = 2π
+        [0, 1, 0, 1, 1]  -- B + D + E = 2π
+      ],
+      [
+        HP [0, 1, -1, 0, 0] 0, -- b = c
+        HP [1, 0, 0, 0, -1] 0  -- a = e
+      ]
+    ),
+    ("Type 19", -- TODO: Check is of type 1
+      fromList [
+        [0, 0, 1, 0, 2], -- C + 2E = 2π
+        [0, 1, 0, 2, 0]  -- B + 2D = 2π
+      ],
+      [
+        HP [0, 1, -1, 0, 0] 0, -- b = c
+        HP [0, 0, 1, -1, 0] 0, -- c = d
+        HP [0, 0, 0, 1, -1] 0  -- d = e
+      ]
+    ),
+    -- Degenerate types.
+    ("Type 20", -- TODO: Check is degenerate.
+      fromList [
+        [1, 1, 0, 1, 0] -- A + B + D = 2π
+      ],
+      [
+        HP [1, 0, -1, 0, 0] 0, -- a = c
+        HP [0, 1, 0, -1, -1] 0 -- b = d + e
+
+      ]
+    ),
+    ("Type 21", -- TODO: Check is degenerate.
+      fromList [
+        [0, 0, 0, 1, 2], -- D + 2E = 2π
+        [2, 1, 0, 0, 0]  -- 2A + B = 2π
+      ],
+      [
+        HP [0, 1, -1, 0, 0] 0, -- b = c
+        HP [0, 0, 0, 1, -1] 0  -- d = e
+      ]
+    ),
+    ("Type 22", -- TODO: Check is degenerate.
+      fromList [
+        [0, 0, 1, 0, 2], -- C + 2E = 2π
+        [1, 0, 0, 2, 0]  -- A + 2D = 2π
+      ],
+      [
+        HP [1, -1, 0, 0, 0] 0, -- a = b
+        HP [0, 1, -1, 0, 0] 0, -- b = c
+        HP [0, 0, 1, -1, 0] 0  -- c = d
+      ]
+    ),
+    ("Type 23", -- TODO: Check is degenerate.
+      fromList [
+        [0, 2, 0, 1, 0], -- 2B + D = 2π
+        [1, 1, 0, 1, 0], -- A + B + D = 2π
+        [0, 0, 0, 0, 4]  -- 2E = π
+      ],
+      [
+        HP [0, 1, 0, -2, 0] 0, -- b = 2d
+        HP [0, 0, 0, 1, -1] 0  -- d = e
+      ]
+    ),
+    ("Type 24", -- TODO: Check is degenerate.
+      fromList [
+        [0, 0, 2, 1, 0], -- 2C + D = 2π
+        [0, 1, 1, 0, 1], -- B + C + E = 2π
+        [1, 2, 0, 0, 0]  -- A + 2B = 2π
+      ],
+      [
+        HP [2, -1, 0, -1, 0] 0, -- 2a = b + d
+        HP [0, 1, 0, 1, -2] 0   -- b + d = 2e
+      ]
     )
   ]

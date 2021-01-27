@@ -1,4 +1,4 @@
-module ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints, fromRationalConvexPolytope, affineSubspace) where
+module ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, boundedConvexPolytope, cutHalfSpace, projectOntoHyperplane, extremePoints, localExtremePoints, fromRationalConvexPolytope, affineSubspace) where
 
 import Vector (Vector, zero, (|-|), (|*|), dot, isZero)
 import Matrix (rank)
@@ -48,8 +48,8 @@ projectConstraint (ASS p bs _) (Constraint vs q) =
   in constraint vs' q'
 
 -- Maintains the invariant if Just extr then extr is non-empty.
-localExtremePoints :: (Fractional a, Ord a) => AffineSubspace a -> [(Constraint a, Constraint a)] -> Maybe (Set (Vector a))
-localExtremePoints ass cs =
+computeLocalExtremePoints :: (Fractional a, Ord a) => AffineSubspace a -> [(Constraint a, Constraint a)] -> Maybe (Set (Vector a))
+computeLocalExtremePoints ass cs =
   let d = dimension ass
       projectedConstraints = map snd cs
       extr = helper projectedConstraints (space d) projectedConstraints
@@ -88,7 +88,7 @@ reduceDimensionality strictness ass cs extr =
           -- The following three calls should theoretically always succeed.
           ass' <- intersectWithHyperPlane ass (HP vs q)
           cs' <- withProjectedConstraints strictness ass' $ map fst cs
-          extr' <- localExtremePoints ass' cs'
+          extr' <- computeLocalExtremePoints ass' cs'
           reduceDimensionality strictness ass' cs' extr' -- Recursively simplify.
 
 reduceConstraints :: (Fractional a, Ord a) => ConvexPolytope a -> ConvexPolytope a
@@ -104,7 +104,7 @@ reduceConstraints (CP strictness ass cs extr) =
 boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> [Constraint a] -> Maybe (ConvexPolytope a)
 boundedConvexPolytope strictness ass cs = do
     cs' <- withProjectedConstraints strictness ass $ nub cs -- Here it is important that constraints have been normalized.
-    extr <- localExtremePoints ass cs'
+    extr <- computeLocalExtremePoints ass cs'
     reduceConstraints <$> reduceDimensionality strictness ass cs' extr
 
 -- Constraint is assumed normalized.
@@ -120,7 +120,7 @@ cutHalfSpace (cp@(CP strictness ass cs extr)) c =
       else do
         -- This is why it is important that constraint is normalized to not add the same constraint twice.
         let cs' = if any ((pc==) . snd) cs then cs else (c, pc):cs
-        extr' <- localExtremePoints ass cs'
+        extr' <- computeLocalExtremePoints ass cs'
         reduceConstraints <$> reduceDimensionality strictness ass cs' extr'
 
 projectOntoHyperplane :: (Fractional a, Ord a) => ConvexPolytope a -> HyperPlane a -> Maybe (ConvexPolytope a)
@@ -130,11 +130,14 @@ projectOntoHyperplane (cp@(CP strictness ass cs _)) hp =
     if ass' == ass then return cp -- Projection does not change anything.
     else do
       cs' <- withProjectedConstraints strictness ass' (map fst cs)
-      extr' <- localExtremePoints ass' cs'
+      extr' <- computeLocalExtremePoints ass' cs'
       reduceConstraints <$> reduceDimensionality strictness ass' cs' extr'
 
 extremePoints :: (Num a, Ord a) => ConvexPolytope a -> Set (Vector a)
 extremePoints (CP _ ass _ extr) = Set.map (coordsInSpace ass) extr
+
+localExtremePoints :: (Num a, Ord a) => ConvexPolytope a -> Set (Vector a)
+localExtremePoints (CP _ _ _ extr) = extr
 
 fromRationalConvexPolytope :: ConvexPolytope Rational -> ConvexPolytope AlgebraicNumber
 fromRationalConvexPolytope (CP strictness ass cs extr) =

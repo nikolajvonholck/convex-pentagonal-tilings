@@ -86,7 +86,7 @@ goodSetsExcluding n xs rs (Just angleCP) goodnessCP =
           in if isGood xs' goodnessCP' then insert xs' g else g
 
 asRational :: Vector Integer -> Vector Rational
-asRational = fmap fromInteger
+asRational = map fromInteger
 
 compatOrthogonalComplementBasis :: Integer -> VertexTypeSet -> [Vector Rational]
 compatOrthogonalComplementBasis n xs =

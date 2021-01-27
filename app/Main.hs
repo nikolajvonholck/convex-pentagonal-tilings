@@ -13,14 +13,13 @@ import Text.Read (readMaybe)
 import Control.Monad (forM_)
 
 import GoodSet (VertexTypeSet, goodSets, inflate, permutations, rotationsAndReflections)
-import AlgebraicNumber (AlgebraicNumber)
-import Data.Set (Set, empty, elems, singleton, (\\), size, toList, fromList, unions, member, union)
+import Data.Set (Set, empty, singleton, (\\), size, toList, fromList, unions, member, union)
 import qualified Data.Set as Set
 import TilingGraph (TilingGraph, exhaustiveSearch)
 import Utils (enumerate)
 import Vector (Vector)
 import JSON
-import ConvexPolytope (ConvexPolytope, extremePoints)
+import ConvexPolytope (ConvexPolytope)
 import qualified Data.Map as Map
 import Data.Map (Map, (!?), toAscList)
 import Data.List (genericIndex)
@@ -70,19 +69,19 @@ mainServer = do
 mainExhaustiveSearch :: IO ()
 mainExhaustiveSearch = do
   lists <- backtrackings
-  let zeroDimensionalTraces = [(i, trace) | (i, trace) <- toAscList lists, i >= 121]
-  forM_ zeroDimensionalTraces $ \(i, (_, trace)) -> do
+  let zeroDimensionalTraces = [(i, trace) | (i, trace) <- toAscList lists, i >= 53]
+  forM_ zeroDimensionalTraces $ \(i, trace) -> do
     print i
     print $ length trace
 
-backtrackings :: IO (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)]))
+backtrackings :: IO (Map Integer [(TilingGraph, ConvexPolytope Rational, (Vector Rational, Vector Rational))])
 backtrackings = do
   contents <- readFile "data/michael-rao-good-subsets.txt"
   let raoGenerators = read contents :: [[[Integer]]]
   let raoGoodSets = case sequence $ map ((inflate 5) . fromList) raoGenerators of
         Nothing -> error "Failed to compute Michael Rao's maximal good subsets."
         (Just goodSets') -> goodSets'
-  return $ Map.fromList $ [(i, (alpha, exhaustiveSearch compat alpha)) | (i, (compat, angleCP)) <- enumerate raoGoodSets, let points = elems (extremePoints angleCP), points /= [], let alpha = head points]
+  return $ Map.fromList [(i, exhaustiveSearch compat angleCP) | (i, (compat, angleCP)) <- enumerate raoGoodSets]
 
 startServer :: Application -> IO ()
 startServer app = do
@@ -103,17 +102,17 @@ server res req respond = respond $
           Nothing -> responseLBS status404 [(hContentType, "text/plain")] "Invalid input"
       _ -> responseLBS status200 [(hContentType, "text/plain")] $ "Convex pentagonal tiling server."
 
-makeResponder :: (Map Integer (Vector Rational, [(TilingGraph, ConvexPolytope AlgebraicNumber, Vector Rational)])) -> Integer -> Integer -> String
+makeResponder :: Map Integer [(TilingGraph, ConvexPolytope Rational, (Vector Rational, Vector Rational))] -> Integer -> Integer -> String
 makeResponder lists i k =
   case lists !? i of
     Nothing -> "Good subset not found: " ++ show i
-    Just (alpha, backtracks) ->
-      let (g, lp, ls) = backtracks `genericIndex` k
-          approxAlpha = map fromRational alpha :: [Double]
+    Just backtracks ->
+      let (g, lp, (as, ls)) = backtracks `genericIndex` k
+          approxAngles = map fromRational as :: [Double]
           approxLengths = map fromRational ls :: [Double]
       in jsonObject [
         ("graph", toJSON (Map.map snd g)),
         ("linearProgram", toJSON lp),
         ("lengths", toJSON approxLengths),
-        ("angles", toJSON approxAlpha)
+        ("angles", toJSON approxAngles)
       ]
