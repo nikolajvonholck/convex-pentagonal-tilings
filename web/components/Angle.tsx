@@ -1,5 +1,4 @@
 import React, { FC } from 'react'
-import styles from '../styles/graph.module.css'
 
 type Point = {
   x: number
@@ -72,7 +71,8 @@ const Angle: FC<AngleProps> = ({
         textAnchor='middle'
         alignmentBaseline='central'
         vectorEffect='non-scaling-stroke'
-        className={styles.angleLabel}
+        fontSize='0.02px'
+        className='fill-current text-black'
       >
         {angle === 'Pi' ? 'π' : angle}
       </text>

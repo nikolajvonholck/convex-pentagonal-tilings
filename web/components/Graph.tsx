@@ -1,5 +1,4 @@
 import React, { FC, useMemo } from 'react'
-import styles from '../styles/graph.module.css'
 import Edge from './Edge'
 import Vertex from './Vertex'
 import Angle from './Angle'
@@ -169,7 +168,7 @@ const Graph: FC<GraphProps> = ({ graph: g, angles, lengths }) => {
     <svg
       viewBox={viewBox}
       xmlns='http://www.w3.org/2000/svg'
-      className={styles.graph}
+      className='flex-grow'
     >
       {entries.map(([v, { x, y, edges }]) => {
         const numEdges = edges.length

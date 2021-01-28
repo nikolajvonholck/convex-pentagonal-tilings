@@ -1,5 +1,4 @@
 import React, { FC } from 'react'
-import styles from '../styles/graph.module.css'
 
 type EdgeProps = {
   v1: VertexWithLocation
@@ -16,7 +15,8 @@ const Edge: FC<EdgeProps> = ({
     x2={x2}
     y2={-y2}
     vectorEffect='non-scaling-stroke'
-    className={styles.edge}
+    strokeLinecap='round'
+    className='stroke-current text-black stroke-1'
   />
 )
 

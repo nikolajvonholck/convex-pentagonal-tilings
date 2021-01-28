@@ -1,5 +1,4 @@
 import React, { FC } from 'react'
-import styles from '../styles/graph.module.css'
 
 type VertexProps = {
   x: number
@@ -9,13 +8,19 @@ type VertexProps = {
 
 const Vertex: FC<VertexProps> = ({ x, y, v }) => (
   <g>
-    <circle cx={x} cy={-y} r={0.018} className={styles.vertex} />
+    <circle
+      cx={x}
+      cy={-y}
+      r={0.018}
+      className='fill-current text-black opacity-40'
+    />
     <text
       x={x}
       y={-y}
       textAnchor='middle'
       alignmentBaseline='central'
-      className={styles.vertexLabel}
+      fontSize='0.02px'
+      className='fill-current text-white'
     >
       {v}
     </text>
