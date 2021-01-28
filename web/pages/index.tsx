@@ -41,7 +41,7 @@ const Page: NextPage = () => {
             type='number'
             className='mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md'
             onChange={(e) => {
-              setGoodSetId(+e.target.value)
+              setGoodSetId(Math.max(1, Math.min(371, parseInt(e.target.value))))
               setIteration(0)
             }}
             value={goodSetId}
@@ -66,8 +66,8 @@ const Page: NextPage = () => {
             {isPlaying ? <RiPauseFill size={20} /> : <RiPlayFill size={20} />}
           </button>
         </div>
-        <div className='flex justify-center h-8'>
-          {error && <div className={'text-red-500'}>{error.message}</div>}
+        <div className='flex justify-center h-16'>
+          {error && <div className='text-sm text-red-500'>{error.message}</div>}
           {(isLoading || isPlaying) && <img src='/spinner.svg' />}
         </div>
         <div>
