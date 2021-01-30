@@ -266,7 +266,7 @@ pickIncompleteVertex g xss =
                        let bends = runBends run,
                        length bends == 1,
                        let (x, y) = runEnds run,
-                       let w = if numberOfVerticesAlongRun run == 3 then leastVertexAlongRun run else min x y,
+                       let w = if numberOfVerticesAlongRun run <= 4 then leastVertexAlongRun run else min x y,
                        v <- [x, y],
                        v `elem` incompleteVertices,
                        isHalfVertex $ vertexInfo g v] ++
@@ -279,7 +279,7 @@ pickIncompleteVertex g xss =
                        v `elem` incompleteVertices,
                        isHalfVertex $ vertexInfo g v]
       ranked = fst <$> sortOn snd weighted
-      topFive = take (max 15 (length ranked `div` 2)) ranked -- keep focus.
+      topFive = take 15 ranked -- keep focus.
       weighted' = [(v, w) | v <- topFive, let w = vertexScore v]
   in fst $ minBy snd weighted'
   where
@@ -290,7 +290,7 @@ pickIncompleteVertex g xss =
           xs = if isHalfVertex (hds, cs) then snd xss else fst xss
           vts = compatibleVertexTypes xs vt
           vts' = [sum (vt' |-| vt) | vt' <- elems vts]
-      in genericLength vts' * maximum vts'
+      in sum [product [1..p] | p <- vts']
 
     numberOfVerticesAlongRun :: Run -> Integer
     numberOfVerticesAlongRun (R _ _ Nothing) = 1
@@ -416,7 +416,7 @@ constructSectors angleCP lp sector = do
             ]
           (mins, maxs) = (begin <$> angleBoundingBox, end <$> angleBoundingBox)
       in do
-        guard $ all (<1) mins && all (0<) maxs -- TODO: Consider strict ineqs.
+        guard $ all (<=1) mins && all (0<=) maxs -- TODO: Consider strict ineqs.
         lp' <- foldM cutHalfSpace lp constraints
         let as = averageVector angleBounds
         let ls = averageVector (elems $ extremePoints lp')

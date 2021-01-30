@@ -69,7 +69,7 @@ mainServer = do
 mainExhaustiveSearch :: IO ()
 mainExhaustiveSearch = do
   lists <- backtrackings
-  let zeroDimensionalTraces = [(i, trace) | (i, trace) <- toAscList lists, i >= 53]
+  let zeroDimensionalTraces = [(i, trace) | (i, trace) <- toAscList lists]
   forM_ zeroDimensionalTraces $ \(i, trace) -> do
     print i
     print $ length trace
