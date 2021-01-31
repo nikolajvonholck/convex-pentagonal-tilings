@@ -28,9 +28,9 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    ["goodsets"] -> mainGoodSets
+    ["good-sets"] -> mainGoodSets
     ["server"] -> mainServer
-    ["exhaustiveSearch"] -> mainExhaustiveSearch
+    ["exhaustive-search"] -> mainExhaustiveSearch
     x -> putStrLn $ "Invalid arguments: " ++ show x
 
 mainGoodSets :: IO ()
