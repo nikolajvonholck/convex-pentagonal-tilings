@@ -1,4 +1,4 @@
-module TilingGraph (TilingGraph, exhaustiveSearch) where
+module TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..)) where
 
 import Vector (Vector, (|+|), (|-|), (|*|))
 import Interval (Interval, interval, begin, end, midpoint, width)
@@ -53,6 +53,7 @@ interiorAngles = [AngleA, AngleB, AngleC, AngleD, AngleE]
 -- most one unknown exterior angle and it must be the first angle.
 type VertexInfo = (Set Direction, [Corner])
 type TilingGraph = Map Vertex VertexInfo
+data Pentagon = Pentagon (Vector Rational) (Vector Rational) deriving (Eq)
 
 isVertexComplete :: [Corner] -> Bool
 isVertexComplete ((Corner Unknown _ _ _):_) = False
@@ -302,12 +303,12 @@ pickIncompleteVertex g xss =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: (ConvexPolytope Rational -> Bool) -> (ConvexPolytope Rational -> Maybe (Vector Rational, Vector Rational)) -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, (Vector Rational, Vector Rational))]
+backtrack :: (ConvexPolytope Rational -> Bool) -> (ConvexPolytope Rational -> Maybe Pentagon) -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, Pentagon)]
 backtrack isKnownType construct xss state = traceShow (xss) backtrack' state
   where
-    backtrack' :: (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, (Vector Rational, Vector Rational))]
+    backtrack' :: (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, Pentagon)]
     backtrack' (g, lp) = do
-      (as, ls) <- maybeToList $ construct lp
+      pentagon <- maybeToList $ construct lp
       guard $ not $ isKnownType lp
       -- Situation: We will have to add another tile.
       let v = pickIncompleteVertex g xss
@@ -329,14 +330,14 @@ backtrack isKnownType construct xss state = traceShow (xss) backtrack' state
       let (v1, v2) = direction (v, cornerVertexId)
       -- All possible completions will be handled inside 'mergeVertices'.
       (g', lp') <- mergeVertices xss (disconnectedGraph, lp) v1 v2 Zero
-      (g, lp, (as, ls)) : backtrack' (g', lp')
+      (g, lp, pentagon) : backtrack' (g', lp')
 
 halfVertexTypes :: VertexTypeSet -> VertexTypeSet
 halfVertexTypes xs =
   let withEvenValues = Set.filter (\x -> all (\v -> v `mod` 2 == 0) x) xs
   in Set.map (\x -> [v `div` 2 | v <- x]) withEvenValues
 
-exhaustiveSearch :: VertexTypeSet -> ConvexPolytope Rational -> ([(TilingGraph, ConvexPolytope Rational, (Vector Rational, Vector Rational))])
+exhaustiveSearch :: VertexTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Pentagon)]
 exhaustiveSearch xs angleCP =
   let compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
       xss = traceShow xs (xs, halfVertexTypes xs)
@@ -366,7 +367,7 @@ exhaustiveSearch xs angleCP =
                 in any (\(T tname _ _, clp) -> if affineSubspace alp' `subset` affineSubspace clp then traceShow ("Found " ++ tname) True else False) constructableCompatibleTypes
               construct lp' = do
                 clp <- constructor lp'
-                return (alpha, approximateLengths clp)
+                return $ Pentagon alpha (approximateLengths clp)
           in traceShow ("Constructible known types:", [name | (T name _ _, _) <- constructableCompatibleTypes]) (isKnownType, construct)
         else
           let isKnownType lp' = any (\(T tname _ tlp) -> if affineSubspace lp' `subset` affineSubspace tlp then traceShow ("Found " ++ tname) True else False) compatibleTypes
@@ -383,7 +384,7 @@ boundingBox vs =
       (mins, maxs) = (minimum <$> coordLists, maximum <$> coordLists)
   in interval <$> zipPedantic mins maxs
 
-constructSectors :: ConvexPolytope Rational -> ConvexPolytope Rational -> Sector -> [(Vector Rational, Vector Rational)]
+constructSectors :: ConvexPolytope Rational -> ConvexPolytope Rational -> Sector -> [Pentagon]
 constructSectors angleCP lp sector = do
     construction <- maybeToList $ constructSector sector
     if maximum [width i | i <- sector] < sectorSize
@@ -399,7 +400,7 @@ constructSectors angleCP lp sector = do
           m = midpoint i -- Split at midpoint.
       in [replaceAt k i' is | i' <- [interval (begin i, m), interval (m, end i)]]
 
-    constructSector :: Sector -> Maybe (Vector Rational, Vector Rational)
+    constructSector :: Sector -> Maybe Pentagon
     constructSector sector' =
       let bounds = sequence [[begin i, end i] | i <- sector']
           angleBounds = coordsInSpace (affineSubspace angleCP) <$> bounds
@@ -420,7 +421,7 @@ constructSectors angleCP lp sector = do
         lp' <- foldM cutHalfSpace lp constraints
         let as = averageVector angleBounds
         let ls = averageVector (elems $ extremePoints lp')
-        return (as, ls)
+        return $ Pentagon as ls
 
 pentagonGraph :: Vertex -> Direction -> TilingGraph
 pentagonGraph w orientation =
