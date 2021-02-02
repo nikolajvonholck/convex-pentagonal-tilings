@@ -7,9 +7,9 @@ type Response = {
   lengths: number[]
 }
 
-const useIteration = (
+const useStep = (
   goodSetId: number,
-  iteration: number
+  step: number
 ): [Response | undefined, boolean, Error | undefined] => {
   const [response, setResponse] = useState<Response | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
@@ -17,12 +17,12 @@ const useIteration = (
 
   useEffect(() => {
     let ignore = false
-    const loadIteration = async () => {
+    const loadStep = async () => {
       setIsLoading(true)
       setError(undefined)
       try {
         const response = await fetch(
-          `http://localhost:3333/${goodSetId}/${iteration}`
+          `http://localhost:3001/${goodSetId}/${step}`
         )
         const json = await response.json()
         if (!ignore) {
@@ -37,13 +37,13 @@ const useIteration = (
         setIsLoading(false)
       }
     }
-    loadIteration()
+    loadStep()
     return () => {
       ignore = true
     }
-  }, [goodSetId, iteration])
+  }, [goodSetId, step])
 
   return [response, isLoading, error]
 }
 
-export default useIteration
+export default useStep

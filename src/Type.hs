@@ -20,7 +20,7 @@ typeSymmetries :: (String, VertexTypeSet, [HyperPlane Rational]) -> [Type]
 typeSymmetries (name, cvts, cs) =
   [ T name' cvts' (makeLP cs') | (i, r) <- enumerate (cyclicGroup 5),
                                  (j, (mA, mS)) <- enumerate [(id, id), (reflectAngles, reflectSides)],
-                                 let name' = name ++ ": Rotation " ++ show i ++ if j == 2 then " (reflected)" else "",
+                                 let name' = name ++ ", rotation " ++ show i ++ if j == 2 then " (reflected)" else "",
                                  let cvts' = Set.map ((permute r) . mA) cvts,
                                  let cs' = [HP (permute r $ mS t) q | HP t q <- cs]]
   where

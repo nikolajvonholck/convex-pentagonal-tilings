@@ -3,27 +3,26 @@ import Head from 'next/head'
 import { NextPage } from 'next'
 import Graph from '../components/Graph'
 import LinearProgram from '../components/LinearProgram'
-import useIteration from '../hooks/useIteration'
+import useStep from '../hooks/useStep'
 import { RiPlayFill, RiPauseFill } from 'react-icons/ri'
 
 const Page: NextPage = () => {
-  const [goodSetId, setGoodSetId] = useState(1)
+  const [goodSetId, setGoodSetId] = useState<number | undefined>(1)
+  const [step, setStep] = useState<number | undefined>(1)
 
-  const [iteration, setIteration] = useState(0)
-
-  const [response, isLoading, error] = useIteration(goodSetId, iteration)
+  const [response, isLoading, error] = useStep(goodSetId ?? 1, step ?? 1)
 
   const [isPlaying, setIsPlaying] = useState(false)
 
   useEffect(() => error && setIsPlaying(false), [error]) // Stop playing upon error.
 
-  // Increase iteration upon loading it.
+  // Increase step upon loading it.
   useEffect(() => {
     if (error) {
       return setIsPlaying(false)
     }
     if (isPlaying && !isLoading) {
-      setIteration((i) => i + 1)
+      setStep((i) => i + 1)
     }
   }, [isPlaying, isLoading])
 
@@ -39,19 +38,32 @@ const Page: NextPage = () => {
             type='number'
             className='mt-1 focus:ring-blue-500 focus:border-blue-500 w-full shadow-sm text-sm border-gray-300 rounded-md'
             onChange={(e) => {
-              setGoodSetId(Math.max(1, Math.min(371, parseInt(e.target.value))))
-              setIteration(0)
+              const v = parseInt(e.target.value)
+              if (Number.isNaN(v) || v === 0) {
+                setGoodSetId(undefined)
+                setStep(undefined)
+              } else {
+                setGoodSetId(Math.max(1, Math.min(371, v)))
+                setStep(1)
+              }
             }}
-            value={goodSetId}
+            value={goodSetId ?? ''}
           />
         </div>
         <div>
-          <label className='text-sm font-medium text-gray-700'>Iteration</label>
+          <label className='text-sm font-medium text-gray-700'>Step</label>
           <input
             type='number'
             className='mt-1 focus:ring-blue-500 focus:border-blue-500 w-full shadow-sm text-sm border-gray-300 rounded-md'
-            onChange={(e) => setIteration(+e.target.value)}
-            value={iteration}
+            onChange={(e) => {
+              const v = parseInt(e.target.value)
+              if (Number.isNaN(v) || v === 0) {
+                setStep(undefined)
+              } else {
+                setStep(Math.max(1, v))
+              }
+            }}
+            value={step ?? ''}
           />
         </div>
         <div>

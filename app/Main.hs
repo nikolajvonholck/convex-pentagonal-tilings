@@ -16,13 +16,13 @@ import GoodSet (VertexTypeSet, goodSets, inflate, permutations, rotationsAndRefl
 import Data.Set (Set, empty, singleton, (\\), size, toList, fromList, unions, member, union)
 import qualified Data.Set as Set
 import TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..))
-import Utils (enumerate)
+import Type (Type(..))
+import Utils (enumerate, (!))
 import JSON
 import ConvexPolytope (ConvexPolytope, affineSubspace)
 import AffineSubspace (dimension)
 import qualified Data.Map as Map
 import Data.Map (Map, (!?), toAscList)
-import Data.List (genericIndex)
 import Data.Maybe (fromJust)
 import Control.Monad (when)
 
@@ -80,24 +80,28 @@ mainExhaustiveSearch :: IO ()
 mainExhaustiveSearch = do
   tracks <- backtrackings <$> loadGoodSetsByRao
   forM_ (toAscList tracks) $ \(i, track) -> do
-    print i
-    print $ length track
+    putStrLn $ "Exhaustive search for good set: " ++ show i
+    forM_ (enumerate track) $ \(j, (_, _, _, knownType)) -> do
+      case knownType of
+        Just (T name _ _) -> putStrLn $ "Step " ++ show j ++ ": " ++ name
+        Nothing -> return ()
+    putStrLn $ "Total number of steps: " ++ (show $ length $ track)
 
 loadGoodSetsByRao :: IO [(VertexTypeSet, ConvexPolytope Rational)]
 loadGoodSetsByRao = do
-  contents <- readFile "data/michael-rao-good-subsets.txt"
+  contents <- readFile "data/michael-rao-good-sets.txt"
   let raoGenerators = read contents :: [[[Integer]]]
   return $ case sequence $ ((inflate 5) . fromList) <$> raoGenerators of
     Nothing -> error "Failed to load Michael Rao's good sets."
     Just sets -> sets
 
-backtrackings :: [(VertexTypeSet, ConvexPolytope Rational)] -> Map Integer [(TilingGraph, ConvexPolytope Rational, Pentagon)]
+backtrackings :: [(VertexTypeSet, ConvexPolytope Rational)] -> Map Integer [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
 backtrackings raoGoodSets =
   Map.fromList [(i, exhaustiveSearch compat angleCP) | (i, (compat, angleCP)) <- enumerate raoGoodSets]
 
 startServer :: Application -> IO ()
 startServer app = do
-  let port = 3333
+  let port = 3001
   putStrLn $ "Listening on port " ++ show port
   run port app
 
@@ -114,12 +118,12 @@ server res req respond = respond $
           Nothing -> responseLBS status404 [(hContentType, "text/plain")] "Invalid input"
       _ -> responseLBS status200 [(hContentType, "text/plain")] $ "Convex pentagonal tiling server."
 
-makeResponder :: Map Integer [(TilingGraph, ConvexPolytope Rational, Pentagon)] -> Integer -> Integer -> String
+makeResponder :: Map Integer [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)] -> Integer -> Integer -> String
 makeResponder lists i k =
   case lists !? i of
-    Nothing -> "Good subset not found: " ++ show i
+    Nothing -> "Good set not found: " ++ show i
     Just backtracks ->
-      let (g, lp, Pentagon as ls) = backtracks `genericIndex` k
+      let (g, lp, Pentagon as ls, _) = backtracks ! k
           approxAngles = fromRational <$> as :: [Double]
           approxLengths = fromRational <$> ls :: [Double]
       in jsonObject [

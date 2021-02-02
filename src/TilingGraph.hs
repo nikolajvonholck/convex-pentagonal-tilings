@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 import Data.Set (Set, empty, member, notMember, elems, union, size)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map, insert, delete, fromList)
-import Data.Maybe (fromJust, maybeToList, listToMaybe)
+import Data.Maybe (fromJust, maybeToList, listToMaybe, isJust)
 import Data.List (find, genericTake, genericLength, sortOn, transpose)
 import Control.Monad (guard, foldM)
 import qualified Data.Tuple as Tuple
@@ -303,44 +303,46 @@ pickIncompleteVertex g xss =
 --  • The corrected vertex type of every complete vertex lies in xs.
 --  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
 --  • There are no unchecked exterior (pi/empty) angles.
-backtrack :: (ConvexPolytope Rational -> Bool) -> (ConvexPolytope Rational -> Maybe Pentagon) -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, Pentagon)]
-backtrack isKnownType construct xss state = traceShow (xss) backtrack' state
+backtrack :: (ConvexPolytope Rational -> Maybe Type) -> (ConvexPolytope Rational -> Maybe Pentagon) -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
+backtrack findKnownType construct xss = backtrack'
   where
-    backtrack' :: (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, Pentagon)]
+    backtrack' :: (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
     backtrack' (g, lp) = do
       pentagon <- maybeToList $ construct lp
-      guard $ not $ isKnownType lp
-      -- Situation: We will have to add another tile.
-      let v = pickIncompleteVertex g xss
-      let (hds, cs) = vertexInfo g v
-      (direction, hds') <- if size hds > 1 then error "Invalid vertex!" else
-                           if Clockwise `member` hds then [(id, hds)]
-                           else if CounterClockwise `member` hds then [(Tuple.swap, hds)]
-                           else -- hds is empty
-                             if isCompatibleWith (snd xss) (vertexType cs) && piAngles cs == 0 -- Check if might become half vertex.
-                                then [(id, hds), (Tuple.swap, Set.insert CounterClockwise hds)]
-                                else [(id, hds)]
-      let g'' = Map.insert v (hds', cs) g -- Update half vertex status of v.
-      orientation <- [CounterClockwise, Clockwise] -- Pick orientation of new pentagon.
-      let maxVertexId = fst $ Map.findMax g'' -- initial 5.
-      let anotherTile = pentagonGraph maxVertexId orientation
-      let disconnectedGraph = Map.unionWith (\_ _ -> error "Vertex id collision!") g'' anotherTile
-      corner <- interiorAngles
-      let cornerVertexId = fst $ fromJust $ minWhere (\(_, (_, cs')) -> any (\c -> interiorAngle c == corner) cs') anotherTile
-      let (v1, v2) = direction (v, cornerVertexId)
-      -- All possible completions will be handled inside 'mergeVertices'.
-      (g', lp') <- mergeVertices xss (disconnectedGraph, lp) v1 v2 Zero
-      (g, lp, pentagon) : backtrack' (g', lp')
+      let knownType = findKnownType lp
+      (g, lp, pentagon, knownType) : do
+          guard $ not $ isJust knownType
+          -- Situation: We will have to add another tile.
+          let v = pickIncompleteVertex g xss
+          let (hds, cs) = vertexInfo g v
+          (direction, hds') <- if size hds > 1 then error "Invalid vertex!" else
+                               if Clockwise `member` hds then [(id, hds)]
+                               else if CounterClockwise `member` hds then [(Tuple.swap, hds)]
+                               else -- hds is empty
+                                 if isCompatibleWith (snd xss) (vertexType cs) && piAngles cs == 0 -- Check if might become half vertex.
+                                    then [(id, hds), (Tuple.swap, Set.insert CounterClockwise hds)]
+                                    else [(id, hds)]
+          let g'' = Map.insert v (hds', cs) g -- Update half vertex status of v.
+          orientation <- [CounterClockwise, Clockwise] -- Pick orientation of new pentagon.
+          let maxVertexId = fst $ Map.findMax g'' -- initial 5.
+          let anotherTile = pentagonGraph maxVertexId orientation
+          let disconnectedGraph = Map.unionWith (\_ _ -> error "Vertex id collision!") g'' anotherTile
+          corner <- interiorAngles
+          let cornerVertexId = fst $ fromJust $ minWhere (\(_, (_, cs')) -> any (\c -> interiorAngle c == corner) cs') anotherTile
+          let (v1, v2) = direction (v, cornerVertexId)
+          -- All possible completions will be handled inside 'mergeVertices'.
+          (g', lp') <- mergeVertices xss (disconnectedGraph, lp) v1 v2 Zero
+          backtrack' (g', lp')
 
 halfVertexTypes :: VertexTypeSet -> VertexTypeSet
 halfVertexTypes xs =
   let withEvenValues = Set.filter (\x -> all (\v -> v `mod` 2 == 0) x) xs
   in Set.map (\x -> [v `div` 2 | v <- x]) withEvenValues
 
-exhaustiveSearch :: VertexTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Pentagon)]
+exhaustiveSearch :: VertexTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
 exhaustiveSearch xs angleCP =
   let compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
-      xss = traceShow xs (xs, halfVertexTypes xs)
+      xss = (xs, halfVertexTypes xs)
       g = pentagonGraph 0 CounterClockwise
       lp = fromJust $ do
         ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 1)
@@ -351,30 +353,30 @@ exhaustiveSearch xs angleCP =
             constraint [0, 0, 0, -1, 0] 0, constraint [0, 0, 0, 1, 0] 1,
             constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
           ] -- (0, 1)^5
-      (isKnownType', construct') =
+      (findKnownType', construct') =
         if dimension (affineSubspace angleCP) == 0
         then -- Decide on algebric field extension of the rationals.
           let alpha = head $ elems $ extremePoints angleCP
-              s = angleSum (traceShow alpha alpha)
+              s = angleSum alpha
               (ps, q) = commonDenominator s
               r = cosineFieldExtension q
               sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0
               cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
               constructor lp' = foldM projectOntoHyperplane (fromRationalConvexPolytope lp') [sineConstraint, cosineConstraint]
               constructableCompatibleTypes = [(t, clp) | t@(T _ _ tlp) <- compatibleTypes, clp <- maybeToList $ constructor tlp]
-              isKnownType lp' =
-                let alp' = fromJust $ constructor lp' -- Assumes constructible.
-                in any (\(T tname _ _, clp) -> if affineSubspace alp' `subset` affineSubspace clp then traceShow ("Found " ++ tname) True else False) constructableCompatibleTypes
+              findKnownType lp' = do
+                alp' <- constructor lp' -- Assumes constructible.
+                listToMaybe [t | (t, clp) <- constructableCompatibleTypes, affineSubspace alp' `subset` affineSubspace clp]
               construct lp' = do
                 clp <- constructor lp'
                 return $ Pentagon alpha (approximateLengths clp)
-          in traceShow ("Constructible known types:", [name | (T name _ _, _) <- constructableCompatibleTypes]) (isKnownType, construct)
+          in (findKnownType, construct)
         else
-          let isKnownType lp' = any (\(T tname _ tlp) -> if affineSubspace lp' `subset` affineSubspace tlp then traceShow ("Found " ++ tname) True else False) compatibleTypes
+          let findKnownType lp' = listToMaybe $ [t | t@(T _ _ tlp) <- compatibleTypes, affineSubspace lp' `subset` affineSubspace tlp]
               initialSector = boundingBox (elems $ localExtremePoints angleCP)
               construct lp' = listToMaybe $ constructSectors angleCP lp' initialSector
-          in (isKnownType, construct)
-  in backtrack isKnownType' construct' (traceShow [name | T name _ _ <- compatibleTypes] xss) (g, lp)
+          in (findKnownType, construct)
+  in backtrack findKnownType' construct' xss (g, lp)
 
 type Sector = [Interval Rational]
 
