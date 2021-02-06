@@ -1,6 +1,6 @@
 module AlgebraicNumber where
 
-import Polynomial (Polynomial, evaluate, bound, euclideanDivision, degreeWithLeadingCoefficient, constant)
+import Polynomial (Polynomial, evaluate, bound, euclideanDivision, degreeWithLeadingCoefficient, constant, extendedSignedRemainderSequence)
 import Interval (Interval, interval, begin, end, midpoint, width)
 
 import Data.List (find)
@@ -25,7 +25,7 @@ bisections (Root f i) = bisections' f i
       let (a, b, c) = (begin i', end i', midpoint i')
           (ga, gb, gc) = (evaluate g a, evaluate g b, evaluate g c)
           i'' = case ((ga * gb) `compare` 0, (ga * gc) `compare` 0) of
-                (LT, LT) -> interval (a, c)
+                (LT, LT) -> interval (a, c) -- TODO: Check math.
                 (LT, GT) -> interval (c, b)
                 _ -> error "Assumptions for bisections violated."
       in i' : bisections' g i''
@@ -88,18 +88,12 @@ instance Fractional AlgebraicNumber where
   fromRational = F
 
   recip (F x) = F (recip x)
+  recip (An _ 0) = error "Division by algebraic number zero."
   recip (An (r@(Root f _)) x) =
-    case degreeWithLeadingCoefficient x of
-      Nothing -> error "Division by algebraic number zero."
-      Just (0, c) -> An r (constant $ recip c) -- TODO: Is this only needed for cursive call? Check math!
-      Just _ -> bezout (f, x) (constant 0, constant 1)
-    where
-      bezout :: (Polynomial Rational, Polynomial Rational) -> (Polynomial Rational, Polynomial Rational) -> AlgebraicNumber
-      bezout (r0, r1) (t0, t1) =
-        if r1 == 0 then (An r t0) * (recip $ An r r0)
-        else
-          let q = fst $ euclideanDivision r0 r1
-          in bezout (r1, r0 - q * r1) (t1, t0 - q * t1)
+    let (d, _, v) = last $ extendedSignedRemainderSequence f x -- d = u * f + v * x (Bézout's identity)
+    in case degreeWithLeadingCoefficient d of -- x * (v / d) = 1 (mod f)
+      Just (0, d') -> An r $ constant (recip d') * v -- We have deg(v) < deg(f)
+      _ -> error "Impossible. Polynomial f should be relatively prime to x."
 
 approximate :: Rational -> AlgebraicNumber -> Rational
 approximate _ (F x) = x

@@ -88,5 +88,5 @@ polynomialTests = testGroup "polynomial" [
     testProperty "degree: degree of mul is sum of degrees" prop_degree_mul_adds_degrees,
     testProperty "derivative: decrements degree" prop_derivative_decrements_degree,
     testProperty "bound: contains evaluations at endpoints and midpoint" (withMaxSuccess 50 prop_bound_bounds_eval),
-    testProperty "euclideanDivision: f == g * q + r, deg r < deg g" prop_euclidean_division
+    testProperty "euclideanDivision: f == g * q + r, deg(r) < deg (g)" prop_euclidean_division
   ]
