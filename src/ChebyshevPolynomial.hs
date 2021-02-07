@@ -1,4 +1,4 @@
-module ChebyshevPolynomial (chebyshevT, cosinePoly, cosineMinimalPolynomial, cosineFieldExtension) where
+module ChebyshevPolynomial (chebyshevT, cosinePoly, cosineMinimalPolynomial, cosineFieldExtension, sturm) where
 
 import AlgebraicNumber (Root, root)
 import Polynomial (Polynomial, fromList, constant, euclideanDivision, derivative, evaluate, signedRemainderSequence)
