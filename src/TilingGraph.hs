@@ -7,9 +7,9 @@ import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space, subset, d
 import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, localExtremePoints, fromRationalConvexPolytope, affineSubspace)
 import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
 import Trigonometry (cosBound', sinBound')
-import ChebyshevPolynomial (commonDenominator, cosineFieldExtension, sinePoly, cosinePoly)
+import ChebyshevPolynomial (cosineFieldExtension, cosinePoly)
 import Type (Type(..), knownTypes)
-import Utils ((!), minBy, maxBy, enumerate, replaceAt, zipPedantic)
+import Utils ((!), minBy, maxBy, enumerate, replaceAt, zipPedantic, leastCommonMultiple)
 import JSON
 
 import qualified Data.Set as Set
@@ -19,6 +19,7 @@ import Data.Map.Strict (Map, insert, delete, fromList)
 import Data.Maybe (fromJust, maybeToList, listToMaybe, isJust)
 import Data.List (find, genericTake, genericLength, sortOn, transpose)
 import Control.Monad (guard, foldM)
+import Data.Ratio (numerator, denominator)
 import qualified Data.Tuple as Tuple
 
 import Debug.Trace (traceShow)
@@ -358,10 +359,13 @@ exhaustiveSearch xs angleCP =
         then -- Decide on algebric field extension of the rationals.
           let alpha = head $ elems $ extremePoints angleCP
               s = angleSum alpha
-              (ps, q) = commonDenominator s
+              s' = [1/2 - si | si <- s]
+              q = leastCommonMultiple $ denominator <$> s ++ s'
+              ps = [numerator (si' * (fromInteger q)) | si' <- s']
+              ps' = [numerator (si * (fromInteger q)) | si <- s]
               r = cosineFieldExtension q
-              sineConstraint = HP [algebraicNumber r (sinePoly p) | p <- ps] 0 -- Assumes q is not 1.
               cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
+              sineConstraint = HP [algebraicNumber r (cosinePoly p') | p' <- ps'] 0
               constructor lp' = foldM projectOntoHyperplane (fromRationalConvexPolytope lp') [sineConstraint, cosineConstraint]
               constructableCompatibleTypes = [(t, clp) | t@(T _ _ tlp) <- compatibleTypes, clp <- maybeToList $ constructor tlp]
               findKnownType lp' = do
