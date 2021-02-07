@@ -1,4 +1,4 @@
-module Polynomial (Polynomial, polynomial, evaluate, euclideanDivision, bound, degreeWithLeadingCoefficient, constant, degree, derivative, fromList, signedRemainderSequence, extendedSignedRemainderSequence) where
+module Polynomial (Polynomial, polynomial, evaluate, euclideanDivision, boundPolynomial, degreeWithLeadingCoefficient, constant, degree, derivative, fromList, signedRemainderSequence, extendedSignedRemainderSequence) where
 
 import Interval (Interval, interval, fromElement, begin, end, midpoint, width)
 import Utils (maxBy)
@@ -9,7 +9,6 @@ import Control.Monad (guard)
 
 -- The coeffcients should be non-zero.
 data Polynomial a = Poly (Map Integer a) deriving (Eq, Show)
-
 
 degreeWithLeadingCoefficient :: (Num a) => Polynomial a -> Maybe (Integer, a)
 degreeWithLeadingCoefficient (Poly f) = case toList f of
@@ -38,18 +37,19 @@ derivative (Poly f) =
 evaluate :: (Fractional a, Eq a) => Polynomial a -> a -> a
 evaluate (Poly f) a = sum [c * (a^^i) | (i, c) <- toList f]
 
--- Bounding interval for image of f over the given interval.
-bound :: (Fractional a, Ord a) => Polynomial a -> Interval a -> Interval a
-bound f i =
+-- Bounds the image of f(x) on a closed interval [a, b], i.e. the returned
+-- interval contains f([a, b]).
+boundPolynomial :: (Fractional a, Ord a) => Polynomial a -> Interval a -> Interval a
+boundPolynomial f i =
   case degreeWithLeadingCoefficient f of
     Nothing -> fromElement 0
     Just (0, c) -> fromElement c
     Just _ ->
-      let (x, dx) = (midpoint i, width i / 2)
-          slopeBound = bound (derivative f) i
-          maxSlope = max (abs $ begin slopeBound) (abs $ end slopeBound)
-          fx = evaluate f x
-      in interval (fx - dx * maxSlope, fx + dx * maxSlope)
+      let fm = evaluate f (midpoint i)
+          slopeBound = boundPolynomial (derivative f) i
+          s = max (abs $ begin slopeBound) (abs $ end slopeBound) -- Maximal tangent slope of f(x) on i.
+          t = width i * s / 2
+      in interval (fm - t, fm + t)
 
 instance (Num a, Eq a) => Num (Polynomial a) where
   (Poly f) + (Poly g) = polynomial $ unionWith (+) f g
@@ -87,21 +87,19 @@ euclideanDivision f g =
 -- such that polynomials such that when both f and g are non-zero, then the last
 -- element of the returned list is gcd(f, g).
 signedRemainderSequence :: Polynomial Rational -> Polynomial Rational -> [Polynomial Rational]
-signedRemainderSequence 0 0 = error "Invalid input to signed remainder sequence."
-signedRemainderSequence f 0 = [f]
-signedRemainderSequence f g =
-  let (_, r) = euclideanDivision f g
-  in f : signedRemainderSequence g (-r)
+signedRemainderSequence f g = (\(r, _, _) -> r) <$> extendedSignedRemainderSequence f g
 
 -- Given polynomials f and g, returns a list of triples of polynomials such that
 -- the last element (d, u, v) satisfies the equation
 -- d = u * f + v * g (Bézout's identity) with d = gcd(f, g) and
 -- deg(u) < deg(g) - deg(d) and deg(v) < deg(f) - deg(d).
 extendedSignedRemainderSequence :: Polynomial Rational -> Polynomial Rational -> [(Polynomial Rational, Polynomial Rational, Polynomial Rational)]
-extendedSignedRemainderSequence f g = recurrence (f, 1, 0) (g, 0, 1)
+extendedSignedRemainderSequence 0 0 = error "Invalid input to extended signed remainder sequence."
+extendedSignedRemainderSequence f g = esrs (f, 1, 0) (g, 0, 1)
   where
-    recurrence :: (Polynomial Rational, Polynomial Rational, Polynomial Rational) -> (Polynomial Rational, Polynomial Rational, Polynomial Rational) -> [(Polynomial Rational, Polynomial Rational, Polynomial Rational)]
-    recurrence (s0@(r0, u0, v0)) (s1@(r1, u1, v1)) = s0 : do
+    esrs :: (Polynomial Rational, Polynomial Rational, Polynomial Rational) -> (Polynomial Rational, Polynomial Rational, Polynomial Rational) -> [(Polynomial Rational, Polynomial Rational, Polynomial Rational)]
+    esrs (s0@(r0, u0, v0)) (s1@(r1, u1, v1)) = s0 : do
         guard $ r1 /= 0
-        let (a2, _) = euclideanDivision r0 r1
-        recurrence s1 (-r0 + a2 * r1, -u0 + a2 * u1, -v0 + a2 * v1)
+        let (q2, _) = euclideanDivision r0 r1
+        let s2 = (-r0 + q2 * r1, -u0 + q2 * u1, -v0 + q2 * v1)
+        esrs s1 s2

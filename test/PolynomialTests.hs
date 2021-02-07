@@ -60,9 +60,9 @@ prop_derivative_decrements_degree :: Polynomial Integer -> Property
 prop_derivative_decrements_degree f =
   f /= 0 ==> degree (derivative f) == degree f - 1
 
-prop_bound_bounds_eval :: Polynomial Rational -> Interval Rational -> Bool
-prop_bound_bounds_eval f i =
-  let b = bound f i
+prop_bound_polynomial_bounds_eval :: Polynomial Rational -> Interval Rational -> Bool
+prop_bound_polynomial_bounds_eval f i =
+  let b = boundPolynomial f i
   in all (`isElementOf` b) [evaluate f x | x <- [begin i, end i, midpoint i]]
 
 prop_euclidean_division :: Polynomial Rational -> Polynomial Rational -> Property
@@ -87,6 +87,6 @@ polynomialTests = testGroup "polynomial" [
     testProperty "degree: add does not increase degrees" prop_degree_add_does_not_increase_degree,
     testProperty "degree: degree of mul is sum of degrees" prop_degree_mul_adds_degrees,
     testProperty "derivative: decrements degree" prop_derivative_decrements_degree,
-    testProperty "bound: contains evaluations at endpoints and midpoint" (withMaxSuccess 50 prop_bound_bounds_eval),
+    testProperty "boundPolynomial: contains evaluations at endpoints and midpoint" (withMaxSuccess 50 prop_bound_polynomial_bounds_eval),
     testProperty "euclideanDivision: f == g * q + r, deg(r) < deg (g)" prop_euclidean_division
   ]

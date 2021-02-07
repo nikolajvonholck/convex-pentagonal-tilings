@@ -1,6 +1,6 @@
 module AlgebraicNumber where
 
-import Polynomial (Polynomial, evaluate, bound, euclideanDivision, degreeWithLeadingCoefficient, constant, extendedSignedRemainderSequence)
+import Polynomial (Polynomial, evaluate, boundPolynomial, euclideanDivision, degreeWithLeadingCoefficient, constant, extendedSignedRemainderSequence)
 import Interval (Interval, interval, begin, end, midpoint, width)
 
 import Data.List (find)
@@ -51,7 +51,7 @@ instance Ord AlgebraicNumber where
       isPositive :: AlgebraicNumber -> Bool
       isPositive (F x') = 0 < x'
       isPositive (An r x') =
-        let bounds = map (bound x') (bisections r)
+        let bounds = map (boundPolynomial x') (bisections r)
             i' = fromJust $ find (\i -> 0 < begin i || end i < 0) bounds
         in 0 < begin i'
 
@@ -98,5 +98,5 @@ instance Fractional AlgebraicNumber where
 approximate :: Rational -> AlgebraicNumber -> Rational
 approximate _ (F x) = x
 approximate precision (An r x) =
-  let bounds = map (bound x) (bisections r)
+  let bounds = map (boundPolynomial x) (bisections r)
   in midpoint $ fromJust $ find (\i -> width i < precision) bounds
