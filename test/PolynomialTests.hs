@@ -4,7 +4,7 @@
 module PolynomialTests where
 
 import Polynomial
-import Interval (Interval, begin, end, midpoint, isElementOf)
+import Interval (Interval, interval, width, begin, end, midpoint, isElementOf)
 import IntervalTests()
 
 import Test.Tasty
@@ -65,6 +65,15 @@ prop_bound_polynomial_bounds_eval f i =
   let b = boundPolynomial f i
   in all (`isElementOf` b) [evaluate f x | x <- [begin i, end i, midpoint i]]
 
+prop_bound_polynomial_half_half :: Polynomial Rational -> Interval Rational -> Bool
+prop_bound_polynomial_half_half f i =
+  let b = boundPolynomial f i
+      i' = interval (begin i, midpoint i)
+      b' = boundPolynomial f i'
+      i'' = interval (midpoint i, end i)
+      b'' = boundPolynomial f i''
+  in width b' <= width b / 2 && width b'' <= width b / 2
+
 prop_euclidean_division :: Polynomial Rational -> Polynomial Rational -> Property
 prop_euclidean_division f g =
   g /= 0 ==>
@@ -88,5 +97,6 @@ polynomialTests = testGroup "polynomial" [
     testProperty "degree: degree of mul is sum of degrees" prop_degree_mul_adds_degrees,
     testProperty "derivative: decrements degree" prop_derivative_decrements_degree,
     testProperty "boundPolynomial: contains evaluations at endpoints and midpoint" (withMaxSuccess 50 prop_bound_polynomial_bounds_eval),
+    testProperty "boundPolynomial: width of bound of half interval is at most half of width of interval" prop_bound_polynomial_half_half,
     testProperty "euclideanDivision: f == g * q + r, deg(r) < deg (g)" prop_euclidean_division
   ]

@@ -23,7 +23,6 @@ chebyshevT = chebyshevPolys 1 (fromList [(1, 1)])
 cosinePoly :: Integer -> Polynomial Rational
 cosinePoly n = chebyshevT `genericIndex` (abs n)
 
--- TODO: Handle that cos(2 * pi / n) is rational for n/2 = 3.
 -- Returns the minimal polynomial of cos(2 * pi / n) for a positive integer n.
 cosineMinimalPolynomial :: Integer -> Polynomial Rational
 cosineMinimalPolynomial n =
@@ -35,7 +34,7 @@ cosineMinimalPolynomial n =
       q = product [cosineMinimalPolynomial d | d <- divisors n, d < n]
   in fst $ euclideanDivision p q
 
--- Assumes f to be a non-zero polynomial with f(a), f(b) non-zero.
+-- Assumes f to be a positive degree polynomial with f(a), f(b) non-zero.
 -- Returns the number of distinct real roots of f in the interval (a, b).
 sturm :: Polynomial Rational -> Interval Rational -> Integer
 sturm f i =
