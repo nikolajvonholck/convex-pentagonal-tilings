@@ -7,7 +7,7 @@ import qualified Data.Map.Strict as Map
 import Data.Map (Map, toList, filterWithKey, unionWith)
 import Control.Monad (guard)
 
--- The coeffcients should be non-zero.
+-- The coefficients should be non-zero.
 data Polynomial a = Poly (Map Integer a) deriving (Eq, Show)
 
 degreeWithLeadingCoefficient :: (Num a) => Polynomial a -> Maybe (Integer, a)
@@ -20,7 +20,7 @@ degree f = case degreeWithLeadingCoefficient f of
     Nothing -> -1
     Just (i, _) -> i
 
--- Simplifies polynomial by removing zero-coeffcients.
+-- Simplifies polynomial by removing zero-coefficients.
 polynomial :: (Num a, Eq a) => Map Integer a -> Polynomial a
 polynomial m = Poly $ filterWithKey (\i c -> i >= 0 && c /= 0) m
 

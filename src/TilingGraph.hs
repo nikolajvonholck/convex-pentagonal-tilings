@@ -134,7 +134,7 @@ runLengths (R _ a e) = case e of
       [] -> error "Impossible."
       (p:ps) ->
         case a of
-          Zero -> []:(s:p):ps -- Add s finilizing run.
+          Zero -> []:(s:p):ps -- Add s finalising run.
           _ -> (s:p):ps -- Add s to existing run.
 
 exteriorRuns :: TilingGraph -> [Run]
@@ -356,7 +356,7 @@ exhaustiveSearch xs angleCP =
           ] -- (0, 1)^5
       (findKnownType', construct') =
         if dimension (affineSubspace angleCP) == 0
-        then -- Decide on algebric field extension of the rationals.
+        then -- Decide on algebraic field extension of the rationals.
           let alpha = head $ elems $ extremePoints angleCP
               s = angleSum alpha
               s' = [1/2 - si | si <- s]

@@ -12,7 +12,7 @@ import Data.List (find, tails, partition, nub)
 import Control.Monad (guard)
 import Data.Maybe (isJust)
 
--- <= or < depending on strictness. Constraints should always be normalized, so
+-- <= or < depending on strictness. Constraints should always be normalised, so
 -- the constructor should be considered private.
 data Constraint a = Constraint (Vector a) a deriving (Eq, Ord, Show)
 
@@ -103,7 +103,7 @@ reduceConstraints (CP strictness ass cs extr) =
 
 boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> [Constraint a] -> Maybe (ConvexPolytope a)
 boundedConvexPolytope strictness ass cs = do
-    cs' <- withProjectedConstraints strictness ass $ nub cs -- Here it is important that constraints have been normalized.
+    cs' <- withProjectedConstraints strictness ass $ nub cs -- Here it is important that constraints have been normalised.
     extr <- computeLocalExtremePoints ass cs'
     reduceConstraints <$> reduceDimensionality strictness ass cs' extr
 
@@ -118,7 +118,7 @@ cutHalfSpace (cp@(CP strictness ass cs extr)) c =
     if all id evaluations -- The constraint is superfluous.
       then return cp
       else do
-        -- This is why it is important that constraint is normalized to not add the same constraint twice.
+        -- This is why it is important that constraint is normalised to not add the same constraint twice.
         let cs' = if any ((pc==) . snd) cs then cs else (c, pc):cs
         extr' <- computeLocalExtremePoints ass cs'
         reduceConstraints <$> reduceDimensionality strictness ass cs' extr'
