@@ -1,7 +1,7 @@
 module AffineSubspace (AffineSubspace(..), Hyperplane(..), dimension, space, coordsInSpace, intersectWithHyperplane, fromRationalAffineSubspace, subset) where
 
 import Vector (Vector, (|+|), (|-|), (|*|), dot, zero)
-import Matrix (squareMatrix, inSpan)
+import Matrix (squareMatrix, isInSpan)
 import AlgebraicNumber
 import Utils (extract, delta, zipWithPedantic)
 import JSON
@@ -26,7 +26,7 @@ space n = ASS (zero n) (squareMatrix n delta) []
 
 -- Decides whether the first affine subspace is contained in the second one.
 subset :: (Fractional a, Eq a) => AffineSubspace a -> AffineSubspace a -> Bool
-subset (ASS p vs _) (ASS q ws _) = inSpan ws (p |-| q) && all (inSpan ws) vs
+ASS p vs _ `subset` ASS q ws _ = p |-| q `isInSpan` ws && all (`isInSpan` ws) vs
 
 -- Converts coordinates with respect to the basis of the affine subspace into a
 -- point in the surrounding space.

@@ -40,7 +40,7 @@ satisfiesConstraint NonStrict c x = evaluateConstraint c x /= GT
 projectConstraint :: (Fractional a, Ord a) => AffineSubspace a -> Constraint a -> Constraint a
 projectConstraint (ASS p bs _) (Constraint vs q) =
   let vs' = [vs `dot` b | b <- bs]
-      q' = q - (p `dot` vs)
+      q' = q - (vs `dot` p)
   in constraint vs' q'
 
 -- Maintains the invariant if Just extr then extr is non-empty.

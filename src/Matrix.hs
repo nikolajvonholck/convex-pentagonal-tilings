@@ -1,4 +1,4 @@
-module Matrix (Matrix, reducedEchelonForm, nullSpaceBasis, matrixVectorProduct, mRows, nCols, squareMatrix, rank, inSpan) where
+module Matrix (Matrix, reducedEchelonForm, nullSpaceBasis, matrixVectorProduct, mRows, nCols, squareMatrix, rank, isInSpan) where
 
 import Utils ((!), enumerate, findIndex, delta, zipPedantic)
 import Vector (Vector, dimension, unit, (|*|), dot, isZero)
@@ -86,9 +86,9 @@ addColumn :: Matrix a -> Vector a -> Matrix a
 addColumn ms v = [row ++ [x] | (row, x) <- zipPedantic ms v]
 
 -- Given a list of vectors, check whether the given vector is in their span.
-inSpan :: (Fractional a, Eq a) => [Vector a] -> Vector a -> Bool
-inSpan [] b = isZero b
-inSpan vs b =
+isInSpan :: (Fractional a, Eq a) => Vector a -> [Vector a] -> Bool
+b `isInSpan` [] = isZero b
+b `isInSpan` vs =
   let as = transpose vs -- Consider vectors of span as columns in a matrix.
       ms = addColumn as b
   in rank as == rank ms
