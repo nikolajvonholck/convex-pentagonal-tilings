@@ -1,7 +1,7 @@
 module Type (Type(..), knownTypes) where
 
 import GoodSet (VertexTypeSet)
-import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
+import AffineSubspace (Hyperplane(..), intersectWithHyperplane, space)
 import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope)
 import Permutation (cyclicGroup, permute)
 import Utils (enumerate)
@@ -16,7 +16,7 @@ data Type = T String VertexTypeSet (ConvexPolytope Rational) deriving (Show)
 knownTypes :: [Type]
 knownTypes = concat $ typeSymmetries <$> types
 
-typeSymmetries :: (String, VertexTypeSet, [HyperPlane Rational]) -> [Type]
+typeSymmetries :: (String, VertexTypeSet, [Hyperplane Rational]) -> [Type]
 typeSymmetries (name, cvts, cs) =
   [ T name' cvts' (makeLP cs') | (i, r) <- enumerate (cyclicGroup 5),
                                  (j, (mA, mS)) <- enumerate [(id, id), (reflectAngles, reflectSides)],
@@ -30,9 +30,9 @@ typeSymmetries (name, cvts, cs) =
     reflectAngles :: [a] -> [a]
     reflectAngles = reverse
 
-makeLP :: [HyperPlane Rational] -> ConvexPolytope Rational
+makeLP :: [Hyperplane Rational] -> ConvexPolytope Rational
 makeLP hps = fromJust $ do
-  ass <- foldM intersectWithHyperPlane (space 5) $ (HP [1, 1, 1, 1, 1] 1):hps -- TODO: Perhaps enforce constraints after constructing bounded cp?
+  ass <- foldM intersectWithHyperplane (space 5) $ (HP [1, 1, 1, 1, 1] 1):hps -- TODO: Perhaps enforce constraints after constructing bounded cp?
   boundedConvexPolytope Strict ass [
       constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
       constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
@@ -42,7 +42,7 @@ makeLP hps = fromJust $ do
     ] -- (0, 1)^5
 
 -- name, corrected vector types, linear constraints.
-types :: [(String, VertexTypeSet, [HyperPlane Rational])]
+types :: [(String, VertexTypeSet, [Hyperplane Rational])]
 types = [
     ("Type 1",
       fromList [

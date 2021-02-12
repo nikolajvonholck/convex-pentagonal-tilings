@@ -2,7 +2,7 @@ module ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, b
 
 import Vector (Vector, zero, (|-|), (|*|), dot, isZero)
 import Matrix (rank)
-import AffineSubspace (AffineSubspace (..), HyperPlane (..), coordsInSpace, dimension, space, intersectWithHyperPlane, fromRationalAffineSubspace)
+import AffineSubspace (AffineSubspace (..), Hyperplane (..), coordsInSpace, dimension, space, intersectWithHyperplane, fromRationalAffineSubspace)
 import AlgebraicNumber
 import JSON
 
@@ -58,7 +58,7 @@ computeLocalExtremePoints ass cs =
       concat [ helper pcs subspace' cs' | sublist <- tails toCheck,
                  sublist /= [],
                  let (Constraint vs q):cs' = sublist,
-                 let intersection = intersectWithHyperPlane subspace (HP vs q),
+                 let intersection = intersectWithHyperplane subspace (HP vs q),
                  isJust intersection,
                  let Just subspace' = intersection]
 
@@ -82,7 +82,7 @@ reduceDimensionality strictness ass cs extr =
       NonStrict -> -- Project everything onto the hyperplane defined by the constraint.
         do
           -- The following three calls should theoretically always succeed.
-          ass' <- intersectWithHyperPlane ass (HP vs q)
+          ass' <- intersectWithHyperplane ass (HP vs q)
           cs' <- withProjectedConstraints strictness ass' $ map fst cs
           extr' <- computeLocalExtremePoints ass' cs'
           reduceDimensionality strictness ass' cs' extr' -- Recursively simplify.
@@ -119,10 +119,10 @@ cutHalfSpace (cp@(CP strictness ass cs extr)) c =
         extr' <- computeLocalExtremePoints ass cs'
         reduceConstraints <$> reduceDimensionality strictness ass cs' extr'
 
-projectOntoHyperplane :: (Fractional a, Ord a) => ConvexPolytope a -> HyperPlane a -> Maybe (ConvexPolytope a)
+projectOntoHyperplane :: (Fractional a, Ord a) => ConvexPolytope a -> Hyperplane a -> Maybe (ConvexPolytope a)
 projectOntoHyperplane (CP strictness ass cs _) hp =
   do
-    ass' <- intersectWithHyperPlane ass hp
+    ass' <- intersectWithHyperplane ass hp
     cs' <- withProjectedConstraints strictness ass' (map fst cs)
     extr' <- computeLocalExtremePoints ass' cs'
     reduceConstraints <$> reduceDimensionality strictness ass' cs' extr'

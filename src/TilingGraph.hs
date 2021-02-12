@@ -3,7 +3,7 @@ module TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..)) where
 import Vector (Vector, (|+|), (|-|), (|*|))
 import Interval (Interval, interval, begin, end, midpoint, width)
 import GoodSet (VertexType, VertexTypeSet)
-import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space, subset, dimension, coordsInSpace)
+import AffineSubspace (Hyperplane(..), intersectWithHyperplane, space, subset, dimension, coordsInSpace)
 import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, localExtremePoints, fromRationalConvexPolytope, affineSubspace)
 import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
 import Trigonometry (cosBound', sinBound')
@@ -345,7 +345,7 @@ exhaustiveSearch xs angleCP =
       xss = (xs, halfVertexTypes xs)
       g = pentagonGraph 0 CounterClockwise
       lp = fromJust $ do
-        ass <- intersectWithHyperPlane (space 5) (HP [1, 1, 1, 1, 1] 1)
+        ass <- intersectWithHyperplane (space 5) (HP [1, 1, 1, 1, 1] 1)
         boundedConvexPolytope Strict ass [
             constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
             constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,

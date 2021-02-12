@@ -4,7 +4,7 @@ import Vector (Vector, zero, (|-|), (|+|), (|*|), dot, unit)
 import Matrix (nullSpaceBasis)
 import Permutation (permute, symmetricGroup, dihedralGroup)
 import Utils (minBy, maxBy, (!), zipPedantic)
-import AffineSubspace (HyperPlane(..), intersectWithHyperPlane, space)
+import AffineSubspace (Hyperplane(..), intersectWithHyperplane, space)
 import ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
 
 import qualified Data.Set as Set
@@ -18,7 +18,7 @@ type VertexTypeSet = Set VertexType
 
 initialAngleCP :: Integer -> Maybe (ConvexPolytope Rational)
 initialAngleCP n = do
-  ass <- intersectWithHyperPlane (space n) (HP (genericReplicate n 1) (fromInteger $ n - 2))
+  ass <- intersectWithHyperplane (space n) (HP (genericReplicate n 1) (fromInteger $ n - 2))
   boundedConvexPolytope NonStrict ass [ineq i | i <- [1..n + 1]] -- 0 <= x_1 <= x_2 <= ... <= x_n <= 1
   where
     ineq :: Integer -> Constraint Rational
@@ -39,7 +39,7 @@ minmax n cp =
 
 initialGoodnessCP :: Integer -> ConvexPolytope Rational
 initialGoodnessCP n = fromJust $ do -- The zero vector is always an element of it.
-  ass <- intersectWithHyperPlane (space n) (HP (genericReplicate n 1) 0) -- sum_{i = 1}^n x_i = 0
+  ass <- intersectWithHyperplane (space n) (HP (genericReplicate n 1) 0) -- sum_{i = 1}^n x_i = 0
   boundedConvexPolytope NonStrict ass [c | i <- [1..n], c <- ineqs i] -- [-1, 1]^n
   where
     ineqs :: Integer -> [Constraint Rational]
@@ -50,7 +50,7 @@ initialGoodnessCP n = fromJust $ do -- The zero vector is always an element of i
 inflate :: Integer -> VertexTypeSet -> Maybe (VertexTypeSet, ConvexPolytope Rational)
 inflate n xs =
   do
-    ass <- intersectWithHyperPlane (space n) (HP (genericReplicate n 1) (fromInteger $ n - 2))
+    ass <- intersectWithHyperplane (space n) (HP (genericReplicate n 1) (fromInteger $ n - 2))
     cp <- boundedConvexPolytope NonStrict ass [c | i <- [1..n], c <- ineqs i] -- [0, 1]^n
     angleCP <- foldM projectOntoHyperplane cp [HP (asRational v) 2 | v <- elems xs]
     let es = elems $ extremePoints angleCP
