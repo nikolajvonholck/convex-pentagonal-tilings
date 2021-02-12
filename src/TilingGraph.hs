@@ -22,8 +22,6 @@ import Control.Monad (guard, foldM)
 import Data.Ratio (numerator, denominator)
 import qualified Data.Tuple as Tuple
 
-import Debug.Trace (traceShow)
-
 type Vertex = Integer
 
 data InteriorAngle = AngleA | AngleB | AngleC | AngleD | AngleE deriving (Show, Eq)
@@ -234,6 +232,7 @@ mergeVertices xss (g, lp) v v' a =
     guard $ a == Pi || (CounterClockwise `notMember` hds && Clockwise `notMember` hds')
     let (vKeep, vDiscard) = (min v v', max v v') -- Choose to keep least vertex index.
     let hds'' = Set.delete CounterClockwise hds `union` Set.delete Clockwise hds'
+    -- TODO: guard $ if (size hds'' == 2 && vertexType cs'' `member` snd xss && piAngles cs'' == 0) then traceShow "Shiit" True else True
     guard $ isValidVertex xss (hds'', cs'') -- Backtrack if merged vertex can never be completed.
     let vi' = completeVertex (hds'', cs'') -- Attempt to complete vertex. Might return unaltered vertex info.
     let g' = Map.map (\(h, c) -> (h, map (renameVertex vDiscard vKeep) c)) $ insert vKeep vi' $ delete vDiscard g
