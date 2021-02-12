@@ -8,26 +8,26 @@ import Data.Ratio ((%))
 -- https://www.johndcook.com/blog/2018/05/22/best-approximations-for-pi/
 -- 0 < approxPi - π < 10^(-11)
 approxPi :: Rational
-approxPi = 1146408 % 364913 -- Matches pi to 11 decimal places.
+approxPi = 1146408 % 364913
 
 precision :: Rational
-precision = 0.0001 -- Should be at least 2 times precision of approxPi.
+precision = 0.0001 -- Should be strictly greater that 2 times precision of approxPi.
 
--- Returns rational interval of width 2 * precision such that cos(x * π) is in
--- the interior of the interval.
+-- Returns closed rational interval of width 2 * precision such that cos(x * π)
+-- is in the interior of the interval.
 cos' :: Rational -> Interval Rational
 cos' x =
   let k = fromInteger . floor $ (x + 1) / 2
-      x' = x - 2 * k -- x' in [-1, 1)
+      x' = x - 2 * k -- x' in [-1, 1[.
       fx = evaluate cosTaylor (approxPi * x')
   in interval (fx - precision, fx + precision) -- Accounts for error in both input and output.
   where
     taylorTerms :: [(Integer, Rational)] -- Infinite list.
     taylorTerms = iterate (\(i, c) -> (i + 2, (-c) / (fromInteger $ (i + 2) * (i + 1)))) (0, 1)
 
-    -- Returns a taylor polynomial f(z) approximating cos(z) for z in [-π, π]
-    -- such that |f(x) - cos(x)| <= precision for all |x| <= π.
-    -- Accounts for the (im)precision of approxPi by using better precision.
+    -- Returns a taylor polynomial f(x) approximating cos(x * approxPi) for x in
+    -- [-1, 1[ such that |f(x * approxPi) - cos(x * approxPi)| < precision / 2
+    -- for all x in [-1, 1[.
     cosTaylor :: Polynomial Rational
     cosTaylor =
       fromList $ takeWhile (\(i, c) -> precision / 2 < (abs (c * (approxPi^^i)))) taylorTerms

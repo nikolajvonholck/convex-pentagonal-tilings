@@ -1,10 +1,7 @@
 module AlgebraicNumber where
 
 import Polynomial (Polynomial, evaluate, boundPolynomial, euclideanDivision, degreeWithLeadingCoefficient, constant, extendedSignedRemainderSequence)
-import Interval (Interval, interval, begin, end, midpoint, width)
-
-import Data.List (find)
-import Data.Maybe (fromJust)
+import Interval (Interval, interval, begin, end, midpoint, width, fromElement, isElementOf)
 
 data AlgebraicNumber = F Rational | An (Root Rational) (Polynomial Rational) deriving (Show)
 
@@ -12,23 +9,24 @@ data Root a = Root (Polynomial a) (Interval a) deriving (Show, Eq)
 
 root :: (Fractional a, Ord a) => Polynomial a -> Interval a -> Root a
 root f i =
-  if evaluate f (begin i) * evaluate f (end i) < 0
+  if evaluate f (begin i) * evaluate f (end i) < 0 || (begin i == end i && evaluate f (begin i) == 0)
     then Root f i
-    else error "Invalid root."
+    else error "Invalid isolating interval."
 
+-- Infinite list of bisections of an isolating interval.
 bisections :: (Fractional a, Ord a) => Root a -> [Interval a]
-bisections (Root f i) = bisections' f i
-  where
-    -- Assumes that either f(a) < 0 < f(b) or f(b) < 0 < f(a).
-    bisections' :: (Fractional a, Ord a) => Polynomial a -> Interval a -> [Interval a]
-    bisections' g i' =
-      let (a, b, c) = (begin i', end i', midpoint i')
-          (ga, gb, gc) = (evaluate g a, evaluate g b, evaluate g c)
-          i'' = case ((ga * gb) `compare` 0, (ga * gc) `compare` 0) of
-                (LT, LT) -> interval (a, c) -- TODO: Check math.
-                (LT, GT) -> interval (c, b)
-                _ -> error "Assumptions for bisections violated."
-      in i' : bisections' g i''
+bisections (Root f i) = iterate (bisectIsolatingInterval f) i
+
+-- Assumes that f(a) < 0 < f(b), f(b) < 0 < f(a) or a = b and f(a) = f(b) = 0.
+-- Returns the first or second half of the given interval such that this
+-- property is maintained.
+bisectIsolatingInterval :: (Fractional a, Ord a) => Polynomial a -> Interval a -> Interval a
+bisectIsolatingInterval f i =
+  let (a, m, b) = (begin i, midpoint i, end i)
+      (fa, fm, fb) = (evaluate f a, evaluate f m, evaluate f b)
+  in if fa * fm < 0 then interval (a, m)
+     else if fm * fb < 0 then interval (m, b)
+       else fromElement m -- Found rational root.
 
 algebraicNumber :: Root Rational -> Polynomial Rational -> AlgebraicNumber
 algebraicNumber (r@(Root f _)) g = An r (snd $ euclideanDivision g f)
@@ -51,9 +49,9 @@ instance Ord AlgebraicNumber where
       isPositive :: AlgebraicNumber -> Bool
       isPositive (F x') = 0 < x'
       isPositive (An r x') =
-        let bounds = map (boundPolynomial x') (bisections r)
-            i' = fromJust $ find (\i -> 0 < begin i || end i < 0) bounds
-        in 0 < begin i'
+        let bounds = boundPolynomial x' <$> bisections r
+            i = head $ dropWhile (0 `isElementOf` i) bounds
+        in 0 < begin i
 
 instance Num AlgebraicNumber where
   F x + F y = F (x + y)
@@ -90,13 +88,13 @@ instance Fractional AlgebraicNumber where
   recip (F x) = F (recip x)
   recip (An _ 0) = error "Division by algebraic number zero."
   recip (An (r@(Root f _)) x) =
-    let (d, _, v) = last $ extendedSignedRemainderSequence f x -- d = u * f + v * x (Bézout's identity)
-    in case degreeWithLeadingCoefficient d of -- x * (v / d) = 1 (mod f)
-      Just (0, d') -> An r $ constant (recip d') * v -- We have deg(v) < deg(f)
+    let (d, u, _) = last $ extendedSignedRemainderSequence x f -- u * x + v * f = d (Bézout's identity)
+    in case degreeWithLeadingCoefficient d of -- x * (u / d) = 1 (mod f)
+      Just (0, d') -> An r $ constant (recip d') * u -- We have deg(u) < deg(f)
       _ -> error "Impossible. Polynomial f should be relatively prime to x."
 
 approximate :: Rational -> AlgebraicNumber -> Rational
 approximate _ (F x) = x
 approximate precision (An r x) =
-  let bounds = map (boundPolynomial x) (bisections r)
-  in midpoint $ fromJust $ find (\i -> width i < precision) bounds
+  let bounds = boundPolynomial x <$> bisections r
+  in midpoint $ head $ dropWhile (\i -> width i >= precision) bounds
