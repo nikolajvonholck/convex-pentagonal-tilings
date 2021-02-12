@@ -11,7 +11,7 @@ import Data.Set (fromList)
 import Control.Monad (foldM)
 import Data.Maybe (fromJust)
 
-data Type = T String VertexTypeSet (ConvexPolytope Rational) deriving (Show, Eq)
+data Type = T String VertexTypeSet (ConvexPolytope Rational) deriving (Show)
 
 knownTypes :: [Type]
 knownTypes = concat $ typeSymmetries <$> types

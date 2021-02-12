@@ -18,9 +18,6 @@ data HyperPlane a = HP (Vector a) a deriving (Eq, Show)
 -- The list hps holds all of the hyperplanes being intersected.
 data AffineSubspace a = ASS (Vector a) [Vector a] [HyperPlane a] deriving (Show)
 
-instance Eq a => Eq (AffineSubspace a) where
-  (ASS p bs _) == (ASS p' bs' _) = (p, bs) == (p', bs')
-
 dimension :: AffineSubspace a -> Integer
 dimension (ASS _ bs _) = genericLength bs
 

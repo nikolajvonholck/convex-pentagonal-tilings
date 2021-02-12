@@ -50,7 +50,7 @@ instance Ord AlgebraicNumber where
       isPositive (F x') = 0 < x'
       isPositive (An r x') =
         let bounds = boundPolynomial x' <$> bisections r
-            i = head $ dropWhile (0 `isElementOf` i) bounds
+            i = head $ dropWhile (0 `isElementOf`) bounds
         in 0 < begin i
 
 instance Num AlgebraicNumber where

@@ -21,10 +21,6 @@ data Strictness = NonStrict | Strict deriving (Eq, Show)
 -- CP strictness ass cs extr
 data ConvexPolytope a = CP Strictness (AffineSubspace a) [(Constraint a, Constraint a)] (Set (Vector a)) deriving (Show)
 
-instance Eq a => Eq (ConvexPolytope a) where
-  (CP s ass _ extr) == (CP s' ass' _ extr') =
-    (s, ass, extr) == (s', ass', extr')
-
 affineSubspace :: ConvexPolytope a -> AffineSubspace a
 affineSubspace (CP _ ass _ _) = ass
 
@@ -124,14 +120,12 @@ cutHalfSpace (cp@(CP strictness ass cs extr)) c =
         reduceConstraints <$> reduceDimensionality strictness ass cs' extr'
 
 projectOntoHyperplane :: (Fractional a, Ord a) => ConvexPolytope a -> HyperPlane a -> Maybe (ConvexPolytope a)
-projectOntoHyperplane (cp@(CP strictness ass cs _)) hp =
+projectOntoHyperplane (CP strictness ass cs _) hp =
   do
     ass' <- intersectWithHyperPlane ass hp
-    if ass' == ass then return cp -- Projection does not change anything.
-    else do
-      cs' <- withProjectedConstraints strictness ass' (map fst cs)
-      extr' <- computeLocalExtremePoints ass' cs'
-      reduceConstraints <$> reduceDimensionality strictness ass' cs' extr'
+    cs' <- withProjectedConstraints strictness ass' (map fst cs)
+    extr' <- computeLocalExtremePoints ass' cs'
+    reduceConstraints <$> reduceDimensionality strictness ass' cs' extr'
 
 extremePoints :: (Num a, Ord a) => ConvexPolytope a -> Set (Vector a)
 extremePoints (CP _ ass _ extr) = Set.map (coordsInSpace ass) extr
