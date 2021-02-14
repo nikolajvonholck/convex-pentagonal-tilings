@@ -1,6 +1,7 @@
 module JSON where
 
 import Data.Map.Strict (Map, toAscList)
+import Data.Set (Set, elems)
 import Data.List (intercalate)
 import Data.Ratio (Ratio, numerator, denominator)
 import AlgebraicNumber (AlgebraicNumber, approximate)
@@ -20,6 +21,9 @@ instance JSON Integer where
 
 instance JSON a => JSON [a] where
   toJSON xs = "[" ++ (intercalate ", " [toJSON x | x <- xs]) ++ "]"
+
+instance JSON a => JSON (Set a) where
+  toJSON = toJSON . elems
 
 instance (Show a, JSON b) => JSON (Map a b) where
   toJSON m = jsonObject [(show k, toJSON v) | (k, v) <- toAscList m]
