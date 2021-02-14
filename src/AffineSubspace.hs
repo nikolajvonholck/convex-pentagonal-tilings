@@ -26,7 +26,7 @@ space n = ASS (zero n) (squareMatrix n delta) []
 
 -- Decides whether the first affine subspace is contained in the second one.
 subset :: (Fractional a, Eq a) => AffineSubspace a -> AffineSubspace a -> Bool
-ASS p vs _ `subset` ASS q ws _ = p |-| q `isInSpan` ws && all (`isInSpan` ws) vs
+ASS p bs _ `subset` ASS p' bs' _ = p |-| p' `isInSpan` bs' && all (`isInSpan` bs') bs
 
 -- Converts coordinates with respect to the basis of the affine subspace into a
 -- point in the surrounding space.
