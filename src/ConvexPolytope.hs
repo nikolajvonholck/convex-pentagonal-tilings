@@ -89,7 +89,7 @@ reduceDimensionality strictness ass cs extr =
           extr' <- computeLocalExtremePoints ass' pcs
           return $ reduceDimensionality strictness ass' cs' extr' -- Recursively simplify.
 
--- Discards constraints that do not correspond to a facet.
+-- Discards every constraint that does not correspond to a facet.
 reduceConstraints :: (Fractional a, Ord a) => ConvexPolytope a -> ConvexPolytope a
 reduceConstraints (CP strictness ass cs extr) =
   let d = dimension ass
