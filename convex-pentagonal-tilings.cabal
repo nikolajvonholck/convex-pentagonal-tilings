@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9867614504fe8d8564c68bf41721c01ba344ddab286d6b48e2415f5c86873f60
+-- hash: 92e654c865c0d60ecc7b9a391ed5c6b56ad0f5401a4b5215989f38edd5fc8f31
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
@@ -53,6 +53,7 @@ library
     , containers >=0.6.2.1
     , http-types
     , text
+    , timeit
     , wai
     , warp
   default-language: Haskell2010
@@ -71,6 +72,7 @@ executable convex-pentagonal-tilings-exe
     , convex-pentagonal-tilings
     , http-types
     , text
+    , timeit
     , wai
     , warp
   default-language: Haskell2010
@@ -100,6 +102,7 @@ test-suite convex-pentagonal-tilings-test
     , tasty-hunit
     , tasty-quickcheck
     , text
+    , timeit
     , wai
     , warp
   default-language: Haskell2010

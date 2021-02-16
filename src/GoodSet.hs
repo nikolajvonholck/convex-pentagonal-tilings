@@ -1,14 +1,16 @@
-module GoodSet (VertexType, VertexTypeSet, goodSets, inflate, permutations, rotationsAndReflections) where
+module GoodSet (VertexType, VertexTypeSet, goodSets, inflate, permutations, ignoringSymmetries, partitionByDimensionality, rotationsAndReflections) where
 
 import Vector (Vector, zero, (|-|), (|+|), (|*|), dot, unit)
 import Matrix (nullSpaceBasis)
 import Permutation (permute, symmetricGroup, dihedralGroup)
 import Utils (minBy, maxBy, (!), zipPedantic)
-import AffineSubspace (Hyperplane(..), intersectWithHyperplane, space)
-import ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
+import AffineSubspace (Hyperplane(..), intersectWithHyperplane, space, dimension)
+import ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, affineSubspace, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
 
 import qualified Data.Set as Set
-import Data.Set (Set, fromList, insert, (\\), elems, empty, union, unions, intersection)
+import Data.Set (Set, fromList, insert, (\\), member, elems, empty, union, unions, intersection)
+import qualified Data.Map as Map
+import Data.Map (toAscList)
 import Data.List (genericLength, transpose, genericReplicate, tails, inits)
 import Control.Monad (guard, foldM)
 import Data.Maybe (fromJust)
@@ -123,3 +125,14 @@ permutations n vs = [Set.map (permute p) vs | p <- symmetricGroup n]
 
 rotationsAndReflections :: Integer -> VertexTypeSet -> [VertexTypeSet]
 rotationsAndReflections n vs = [Set.map (permute p) vs | p <- dihedralGroup n]
+
+ignoringSymmetries :: Integer -> [VertexTypeSet] -> Set VertexTypeSet -> [VertexTypeSet]
+ignoringSymmetries _ [] _ = []
+ignoringSymmetries n (vs:vss) except =
+  if vs `member` except
+    then ignoringSymmetries n vss except
+    else vs : (ignoringSymmetries n vss $ union except $ fromList $ rotationsAndReflections n vs)
+
+partitionByDimensionality :: Integer -> [VertexTypeSet] -> [(Integer, [VertexTypeSet])]
+partitionByDimensionality n vs =
+  toAscList $ foldl (\s v -> Map.insertWith (++) (dimension $ affineSubspace $ snd $ fromJust $ inflate n v) [v] s) Map.empty vs

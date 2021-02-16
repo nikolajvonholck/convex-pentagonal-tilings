@@ -27,6 +27,7 @@ dependencies:
 - http-types
 - bytestring
 - text
+- timeit
 
 library:
   source-dirs: src

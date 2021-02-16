@@ -2,6 +2,7 @@
 
 module Main where
 
+import System.TimeIt
 import System.Environment
 import Network.Wai (responseLBS, pathInfo, Application)
 import Network.Wai.Handler.Warp (run)
@@ -12,18 +13,16 @@ import qualified Data.Text as T
 import Text.Read (readMaybe)
 import Control.Monad (forM_)
 
-import GoodSet (VertexTypeSet, goodSets, inflate, permutations, rotationsAndReflections)
-import Data.Set (Set, empty, singleton, (\\), size, toList, fromList, unions, member, union)
+import GoodSet (VertexTypeSet, goodSets, inflate, permutations, rotationsAndReflections, ignoringSymmetries, partitionByDimensionality)
+import Data.Set (empty, singleton, (\\), size, toList, fromList, unions, elems)
 import qualified Data.Set as Set
 import TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..))
 import Type (Type(..))
 import Utils (enumerate, (!))
 import JSON
-import ConvexPolytope (ConvexPolytope, affineSubspace)
-import AffineSubspace (dimension)
-import qualified Data.Map as Map
+import ConvexPolytope (ConvexPolytope)
+import qualified Data.Map.Strict as Map
 import Data.Map (Map, (!?), toAscList)
-import Data.Maybe (fromJust)
 import Control.Monad (when)
 
 main :: IO ()
@@ -42,34 +41,27 @@ mainGoodSets = do
       putStrLn $ "Considering dimension: " ++ show n
       let maximalGoodSetsN = goodSets n
       let nonEmptyMaximalGoodSetsN = maximalGoodSetsN \\ singleton empty
-      -- For n = 5 we expect to get 193, 3495 and 371, respectively.
-      putStrLn $ "Found: " ++ (show $ size nonEmptyMaximalGoodSetsN)
+      timeIt $ putStrLn $ "Found: " ++ (show $ size nonEmptyMaximalGoodSetsN)
       let allPermutationsN = unions $ Set.map (fromList . (permutations n)) nonEmptyMaximalGoodSetsN
       putStrLn $ "All permutations: " ++ (show $ size allPermutationsN)
-      let representativesN = unique (toList allPermutationsN) empty
+      let representativesN = ignoringSymmetries n (toList allPermutationsN) empty
       putStrLn $ "Ignoring symmetries: " ++ (show $ length representativesN)
       forM_ (partitionByDimensionality n representativesN) $ \(d, vs') -> do
         putStrLn $ "Dimensionality " ++ show d ++ ": " ++ (show $ length vs')
+      forM_ (enumerate representativesN) $ \(i, goodSet) -> do
+        print i
+        print $ elems goodSet
       when (n == 5) $ do
+        let a `isSubsetOf` b = all (\vs -> any (`elem` b) $ rotationsAndReflections n vs) a
         putStrLn "Will compare with Michael Rao's results..."
         raoGoodSets <- map fst <$> loadGoodSetsByRao
         putStrLn "Have we found the same maximal good subsets?"
         let sameResults = (raoGoodSets `isSubsetOf` representativesN) && (representativesN `isSubsetOf` raoGoodSets)
         putStrLn $ if sameResults then "Yes" else "No"
-  where
-    isSubsetOf :: [VertexTypeSet] -> [VertexTypeSet] -> Bool
-    a `isSubsetOf` b = all (\vs -> any (`elem` b) $ rotationsAndReflections 5 vs) a
-
-    unique :: [VertexTypeSet] -> Set VertexTypeSet -> [VertexTypeSet]
-    unique [] _ = []
-    unique (vs:vss) except =
-      if vs `member` except
-        then unique vss except
-        else vs : (unique vss $ union except $ fromList $ rotationsAndReflections 5 vs)
-
-    partitionByDimensionality :: Integer -> [VertexTypeSet] -> [(Integer, [VertexTypeSet])]
-    partitionByDimensionality n vs =
-      toAscList $ foldl (\s v -> Map.insertWith (++) (dimension $ affineSubspace $ snd $ fromJust $ inflate n v) [v] s) Map.empty vs
+        putStrLn $ "Relevant maximal good sets according to Rao's numbering:"
+        forM_ (enumerate raoGoodSets) $ \(i, raoGoodSet) -> do
+          print i
+          print $ elems raoGoodSet
 
 mainServer :: IO ()
 mainServer = do
