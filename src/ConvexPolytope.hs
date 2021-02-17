@@ -12,7 +12,7 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (keysSet, partitionWithKey)
 import Data.List (find, tails)
 import Control.Monad (guard)
-import Data.Maybe (maybeToList, fromJust)
+import Data.Maybe (fromJust)
 
 -- <= or < depending on strictness. Constraints should always be normalised, so
 -- the constructor should be considered private.
@@ -51,18 +51,19 @@ projectConstraint (ASS p bs _) (Constraint vs q) =
 
 -- Maintains the invariant if Just extr then extr is non-empty.
 -- Should be given projected constraints as input.
-computeLocalExtremePoints :: (Fractional a, Ord a) => AffineSubspace a -> Set (Constraint a) -> Maybe (Set (Vector a))
-computeLocalExtremePoints ass pcs =
-  let extr = candidates (space (dimension ass)) (elems pcs)
+computeLocalExtremePoints :: (Fractional a, Ord a) => Integer -> Set (Constraint a) -> Maybe (Set (Vector a))
+computeLocalExtremePoints n pcs =
+  let xs = candidates (Just $ space n) (elems pcs)
+      extr = [x | x <- xs, all (\pc -> satisfiesConstraint NonStrict pc x) pcs]
   in if extr == [] then Nothing else Just $ fromList extr
   where
-    candidates (ASS p [] _) _ = -- The space is zero-dimensional, i.e. a single point.
-      [p | all (\pc -> satisfiesConstraint NonStrict pc p) pcs]
-    candidates subspace queue = do
+    candidates Nothing _ = [] -- The space is zero-dimensional, i.e. a single point.
+    candidates (Just (ASS x [] _)) _ = [x] -- The space is zero-dimensional, i.e. a single point.
+    candidates (Just subspace) queue = do
       sublist <- tails queue
       guard $ sublist /= []
       let c:cs' = sublist
-      subspace' <- maybeToList $ intersectWithHyperplane subspace (boundingHyperplane c)
+      let subspace' = intersectWithHyperplane subspace (boundingHyperplane c)
       candidates subspace' cs'
 
 -- Returns Nothing if a constraint is violated due to projection.
@@ -76,8 +77,8 @@ withProjectedConstraints strictness ass cs =
     return (fromList $ Map.elems csm', keysSet csm')
 
 -- Assumes that extr is non-empty.
-reduceDimensionality :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Constraint a) -> Set (Vector a) -> Maybe (ConvexPolytope a)
-reduceDimensionality strictness ass cs extr =
+affineHull :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Constraint a) -> Set (Vector a) -> Maybe (ConvexPolytope a)
+affineHull strictness ass cs extr =
   case find (\c -> let pc = projectConstraint ass c in all (\e -> evaluateConstraint pc e == EQ) extr) cs of
     Nothing -> Just $ CP strictness ass cs extr -- Dimensionality of affine hull can not be reduced.
     Just c -> case strictness of
@@ -86,8 +87,8 @@ reduceDimensionality strictness ass cs extr =
         fromJust $ do -- The following three calls should theoretically always succeed.
           ass' <- intersectWithHyperplane ass (boundingHyperplane c)
           (cs', pcs) <- withProjectedConstraints strictness ass' cs
-          extr' <- computeLocalExtremePoints ass' pcs
-          return $ reduceDimensionality strictness ass' cs' extr' -- Recursively simplify.
+          extr' <- computeLocalExtremePoints (dimension ass') pcs
+          return $ affineHull strictness ass' cs' extr' -- Recursively simplify.
 
 -- Discards every constraint that does not correspond to a facet.
 reduceConstraints :: (Fractional a, Ord a) => ConvexPolytope a -> ConvexPolytope a
@@ -104,16 +105,16 @@ reduceConstraints (CP strictness ass cs extr) =
 boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> [Constraint a] -> Maybe (ConvexPolytope a)
 boundedConvexPolytope strictness ass cs = do
     (cs', pcs) <- withProjectedConstraints strictness ass $ fromList cs
-    extr <- computeLocalExtremePoints ass pcs
-    cp' <- reduceDimensionality strictness ass cs' extr
+    extr <- computeLocalExtremePoints (dimension ass) pcs
+    cp' <- affineHull strictness ass cs' extr
     return $ reduceConstraints cp'
 
 cutHalfSpace :: (Fractional a, Ord a) => ConvexPolytope a -> Constraint a -> Maybe (ConvexPolytope a)
 cutHalfSpace (CP strictness ass cs _) c =
   do
     (cs', pcs) <- withProjectedConstraints strictness ass (Set.insert c cs)
-    extr' <- computeLocalExtremePoints ass pcs
-    cp' <- reduceDimensionality strictness ass cs' extr'
+    extr' <- computeLocalExtremePoints (dimension ass) pcs
+    cp' <- affineHull strictness ass cs' extr'
     return $ reduceConstraints cp'
 
 projectOntoHyperplane :: (Fractional a, Ord a) => ConvexPolytope a -> Hyperplane a -> Maybe (ConvexPolytope a)
@@ -121,8 +122,8 @@ projectOntoHyperplane (CP strictness ass cs _) hp =
   do
     ass' <- intersectWithHyperplane ass hp
     (cs', pcs) <- withProjectedConstraints strictness ass' cs
-    extr' <- computeLocalExtremePoints ass' pcs
-    cp' <- reduceDimensionality strictness ass' cs' extr'
+    extr' <- computeLocalExtremePoints (dimension ass') pcs
+    cp' <- affineHull strictness ass' cs' extr'
     return $ reduceConstraints cp'
 
 extremePoints :: (Num a, Ord a) => ConvexPolytope a -> Set (Vector a)
