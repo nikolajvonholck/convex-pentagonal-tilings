@@ -4,7 +4,7 @@ import Vector (Vector, (|+|), (|-|), (|*|))
 import Interval (Interval, interval, begin, end, midpoint, width)
 import GoodSet (VertexType, VertexTypeSet)
 import AffineSubspace (Hyperplane(..), intersectWithHyperplane, space, subset, dimension, coordsInSpace)
-import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints, localExtremePoints, fromRationalConvexPolytope, affineSubspace)
+import ConvexPolytope (ConvexPolytope, Strictness(..), constraint, boundedConvexPolytope, cutHyperplane, cutHalfSpace, extremePoints, localExtremePoints, fromRationalConvexPolytope, affineSubspace)
 import AlgebraicNumber (AlgebraicNumber, algebraicNumber, approximate)
 import Trigonometry (cosBound', sinBound')
 import ChebyshevPolynomial (cosineFieldExtension, cosinePoly)
@@ -180,7 +180,7 @@ completeRuns xss (g'', lp) = completeRuns' g'' $ exteriorRuns g''
         [_] -> completeRuns' g rs -- No bends to check. Skip this run.
         [la, lb] ->
           let cs = asRational$ la |-| lb -- la < lb
-          in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
+          in case (cutHalfSpace lp (constraint cs 0), cutHyperplane lp (HP cs 0), cutHalfSpace lp (constraint ((-1) |*| cs) 0)) of
             (Just _, Nothing, Nothing) ->
               do
                 let (hdsx, csx) = vertexInfo g x
@@ -200,7 +200,7 @@ completeRuns xss (g'', lp) = completeRuns' g'' $ exteriorRuns g''
                 Just lps' -> do lp' <- lps'; completeRuns xss (g, lp')
         [la, lb, lc] ->
           let cs = asRational $ (la |+| lc) |-| lb -- la + lc < lb
-          in case (cutHalfSpace lp (constraint cs 0), projectOntoHyperplane lp (HP cs 0)) of
+          in case (cutHalfSpace lp (constraint cs 0), cutHyperplane lp (HP cs 0)) of
             (Just _, Nothing) ->
               do
                 let (hdsx, csx) = vertexInfo g x
@@ -365,7 +365,7 @@ exhaustiveSearch xs angleCP =
               r = cosineFieldExtension q
               cosineConstraint = HP [algebraicNumber r (cosinePoly p) | p <- ps] 0
               sineConstraint = HP [algebraicNumber r (cosinePoly p') | p' <- ps'] 0
-              constructor lp' = foldM projectOntoHyperplane (fromRationalConvexPolytope lp') [sineConstraint, cosineConstraint]
+              constructor lp' = foldM cutHyperplane (fromRationalConvexPolytope lp') [sineConstraint, cosineConstraint]
               constructableCompatibleTypes = [(t, clp) | t@(T _ _ tlp) <- compatibleTypes, clp <- maybeToList $ constructor tlp]
               findKnownType lp' = do
                 alp' <- constructor lp' -- Assumes constructible.

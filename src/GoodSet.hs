@@ -5,7 +5,7 @@ import Matrix (nullSpaceBasis)
 import Permutation (permute, symmetricGroup, dihedralGroup)
 import Utils (minBy, maxBy, (!), zipPedantic)
 import AffineSubspace (Hyperplane(..), intersectWithHyperplane, space, dimension)
-import ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, affineSubspace, boundedConvexPolytope, projectOntoHyperplane, cutHalfSpace, extremePoints)
+import ConvexPolytope (ConvexPolytope, Strictness(..), Constraint, constraint, affineSubspace, boundedConvexPolytope, cutHyperplane, cutHalfSpace, extremePoints)
 
 import qualified Data.Set as Set
 import Data.Set (Set, fromList, insert, (\\), member, elems, empty, union, unions, intersection)
@@ -54,11 +54,11 @@ inflate n xs =
   do
     ass <- intersectWithHyperplane (space n) (HP (genericReplicate n 1) (fromInteger $ n - 2))
     cp <- boundedConvexPolytope NonStrict ass [c | i <- [1..n], c <- ineqs i] -- [0, 1]^n
-    angleCP <- foldM projectOntoHyperplane cp [HP (asRational v) 2 | v <- elems xs]
+    angleCP <- foldM cutHyperplane cp [HP (asRational v) 2 | v <- elems xs]
     let es = elems $ extremePoints angleCP
     let as = (1 / genericLength es) |*| (foldl (|+|) (zero n) es)
     let xs' = compat n xs as
-    angleCP' <- foldM projectOntoHyperplane cp [HP (asRational v) 2 | v <- elems xs']
+    angleCP' <- foldM cutHyperplane cp [HP (asRational v) 2 | v <- elems xs']
     guard $ all (\v -> 0 < v && v < 1) as
     return $ (xs', angleCP')
   where
@@ -82,7 +82,7 @@ goodSetsExcluding n xs rs (Just angleCP) goodnessCP =
               vs = elems $ extensionCandidates as mins minEs \\ (xs' `union` rs)
               g = unions $ do
                     (v, prevVs) <- zip vs (inits vs)
-                    let angleCP' = projectOntoHyperplane angleCP (HP (asRational v) 2)
+                    let angleCP' = cutHyperplane angleCP (HP (asRational v) 2)
                     let goodnessCP'' = fromJust $ cutHalfSpace goodnessCP' (constraint (asRational v) 0)
                     return $ goodSetsExcluding n (insert v xs') (rs `union` fromList prevVs) angleCP' goodnessCP''
           in if isGood xs' goodnessCP' then insert xs' g else g
