@@ -21,7 +21,7 @@ import Type (Type(..))
 import Utils (enumerate, (!))
 import JSON
 import ConvexPolytope (ConvexPolytope)
-import qualified Data.Map.Strict as Map
+import qualified Data.Map as Map
 import Data.Map (Map, (!?), toAscList)
 import Control.Monad (when)
 
