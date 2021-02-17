@@ -90,7 +90,7 @@ facetConstraints (CP strictness ass cs extr) =
     isFacet c = let pc = projectConstraint ass c in
       case [e | e <- elems extr, evaluateConstraint pc e == EQ] of
         [] -> False
-        (p0:ps) -> rank [p |-| p0 | p <- ps] == d - 1)
+        (p0:ps) -> rank [p |-| p0 | p <- ps] == d - 1
 
 -- The provided constraints should correspond to a bounded polytope.
 boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> [Constraint a] -> Maybe (ConvexPolytope a)
