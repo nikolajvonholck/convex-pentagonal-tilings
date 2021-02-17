@@ -32,7 +32,7 @@ typeSymmetries (name, cvts, cs) =
 
 makeLP :: [Hyperplane Rational] -> ConvexPolytope Rational
 makeLP hps = fromJust $ do
-  ass <- foldM intersectWithHyperplane (space 5) $ (HP [1, 1, 1, 1, 1] 1):hps -- TODO: Perhaps enforce constraints after constructing bounded cp?
+  ass <- foldM intersectWithHyperplane (space 5) $ (HP [1, 1, 1, 1, 1] 1):hps
   boundedConvexPolytope Strict ass [
       constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
       constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
@@ -41,7 +41,7 @@ makeLP hps = fromJust $ do
       constraint [0, 0, 0, 0, -1] 0, constraint [0, 0, 0, 0, 1] 1
     ] -- (0, 1)^5
 
--- name, corrected vector types, linear constraints.
+-- name, corrected vertex types, linear constraints.
 types :: [(String, VertexTypeSet, [Hyperplane Rational])]
 types = [
     ("Type 1",
@@ -213,9 +213,9 @@ types = [
         [1, 0, 2, 0, 0]  -- A + 2C = 2π
       ],
       [
-        HP [0, 1, 0, -1, 0] 0, -- b = d
+        HP [1, -2, 0, 0, 0] 0, -- a = 2b
         HP [0, 2, 0, 0, -1] 0, -- 2b = e
-        HP [1, 0, 0, 0, -1] 0  -- a = e
+        HP [0, 1, 0, -1, 0] 0  -- b = d
       ]
     ),
     ("Type 17", -- TODO: Check is of type 2
@@ -237,8 +237,8 @@ types = [
         [0, 1, 0, 1, 1]  -- B + D + E = 2π
       ],
       [
-        HP [0, 1, -1, 0, 0] 0, -- b = c
-        HP [1, 0, 0, 0, -1] 0  -- a = e
+        HP [1, 0, 0, 0, -1] 0, -- a = e
+        HP [0, 1, -1, 0, 0] 0  -- b = c
       ]
     ),
     ("Type 19", -- TODO: Check is of type 1
@@ -303,7 +303,7 @@ types = [
       ],
       [
         HP [2, -1, 0, -1, 0] 0, -- 2a = b + d
-        HP [0, 1, 0, 1, -2] 0   -- b + d = 2e
+        HP [0, -1, 0, -1, 2] 0  -- 2e = b + d
       ]
     )
   ]
