@@ -14,15 +14,17 @@ import Text.Read (readMaybe)
 import Control.Monad (forM_)
 
 import GoodSet (VertexTypeSet, goodSets, inflate, permutations, rotationsAndReflections, ignoringSymmetries, partitionByDimensionality)
-import Data.Set (empty, singleton, (\\), size, toList, fromList, unions, elems)
+import Data.Set (empty, singleton, (\\), size, fromList, unions, elems)
 import qualified Data.Set as Set
 import TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..))
 import Type (Type(..))
 import Utils (enumerate, (!))
 import JSON
 import ConvexPolytope (ConvexPolytope)
-import qualified Data.Map as Map
+import qualified Data.Map as Map -- Map should be non-strict.
 import Data.Map (Map, (!?), toAscList)
+import Data.Maybe (catMaybes)
+import Data.List (intercalate)
 import Control.Monad (when)
 
 main :: IO ()
@@ -44,7 +46,7 @@ mainGoodSets = do
       timeIt $ putStrLn $ "Found: " ++ (show $ size nonEmptyMaximalGoodSetsN)
       let allPermutationsN = unions $ Set.map (fromList . (permutations n)) nonEmptyMaximalGoodSetsN
       putStrLn $ "All permutations: " ++ (show $ size allPermutationsN)
-      let representativesN = ignoringSymmetries n (toList allPermutationsN) empty
+      let representativesN = ignoringSymmetries n (elems allPermutationsN) empty
       putStrLn $ "Ignoring symmetries: " ++ (show $ length representativesN)
       forM_ (partitionByDimensionality n representativesN) $ \(d, vs') -> do
         putStrLn $ "Dimensionality " ++ show d ++ ": " ++ (show $ length vs')
@@ -71,12 +73,13 @@ mainServer = do
 mainExhaustiveSearch :: IO ()
 mainExhaustiveSearch = do
   tracks <- backtrackings <$> loadGoodSetsByRao
-  forM_ (toAscList tracks) $ \(i, track) -> do
+  forM_ (toAscList tracks) $ \(i, (goodSet, track)) -> do
     putStrLn $ "Exhaustive search for good set: " ++ show i
-    forM_ (enumerate track) $ \(j, (_, _, _, knownType)) -> do
-      case knownType of
-        Just (T name _ _) -> putStrLn $ "Step " ++ show j ++ ": " ++ name
-        Nothing -> return ()
+    print $ elems goodSet
+    let foundTypes = catMaybes [knownType | (_, _, _, knownType) <- track]
+    let foundTypeNames = fromList [ name | T (name, _) _ _  <- foundTypes]
+    putStrLn "Found types:"
+    putStrLn $ intercalate ", " $ elems foundTypeNames
     putStrLn $ "Total number of steps: " ++ (show $ length $ track)
 
 loadGoodSetsByRao :: IO [(VertexTypeSet, ConvexPolytope Rational)]
@@ -87,9 +90,9 @@ loadGoodSetsByRao = do
     Nothing -> error "Failed to load Michael Rao's good sets."
     Just sets -> sets
 
-backtrackings :: [(VertexTypeSet, ConvexPolytope Rational)] -> Map Integer [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
+backtrackings :: [(VertexTypeSet, ConvexPolytope Rational)] -> Map Integer (VertexTypeSet, [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)])
 backtrackings raoGoodSets =
-  Map.fromList [(i, exhaustiveSearch compat angleCP) | (i, (compat, angleCP)) <- enumerate raoGoodSets]
+  Map.fromList [(i, (goodSet, exhaustiveSearch goodSet angleCP)) | (i, (goodSet, angleCP)) <- enumerate raoGoodSets]
 
 startServer :: Application -> IO ()
 startServer app = do
@@ -110,11 +113,11 @@ server res req respond = respond $
           Nothing -> responseLBS status404 [(hContentType, "text/plain")] "Invalid input"
       _ -> responseLBS status200 [(hContentType, "text/plain")] $ "Convex pentagonal tiling server."
 
-makeResponder :: Map Integer [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)] -> Integer -> Integer -> String
+makeResponder :: Map Integer (VertexTypeSet, [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]) -> Integer -> Integer -> String
 makeResponder lists i k =
   case lists !? i of
     Nothing -> "Good set not found: " ++ show i
-    Just backtracks ->
+    Just (_, backtracks) ->
       let (g, lp, Pentagon as ls, _) = backtracks ! k
           approxAngles = fromRational <$> as :: [Double]
           approxLengths = fromRational <$> ls :: [Double]

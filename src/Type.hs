@@ -11,16 +11,16 @@ import Data.Set (fromList)
 import Control.Monad (foldM)
 import Data.Maybe (fromJust)
 
-data Type = T String VertexTypeSet (ConvexPolytope Rational) deriving (Show)
+data Type = T (String, String) VertexTypeSet (ConvexPolytope Rational) deriving (Show)
 
 knownTypes :: [Type]
 knownTypes = concat $ typeSymmetries <$> types
 
 typeSymmetries :: (String, VertexTypeSet, [Hyperplane Rational]) -> [Type]
 typeSymmetries (name, cvts, cs) =
-  [ T name' cvts' (makeLP cs') | (i, r) <- enumerate (cyclicGroup 5),
+  [ T (name, symmetry) cvts' (makeLP cs') | (i, r) <- enumerate (cyclicGroup 5),
                                  (j, (mA, mS)) <- enumerate [(id, id), (reflectAngles, reflectSides)],
-                                 let name' = name ++ ", rotation " ++ show i ++ if j == 2 then " (reflected)" else "",
+                                 let symmetry = "rotation " ++ show i ++ if j == 2 then " (reflected)" else "",
                                  let cvts' = Set.map ((permute r) . mA) cvts,
                                  let cs' = [HP (permute r $ mS t) q | HP t q <- cs]]
   where
