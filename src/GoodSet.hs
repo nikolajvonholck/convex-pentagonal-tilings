@@ -21,7 +21,7 @@ type VertexTypeSet = Set VertexType
 initialAngleCP :: Integer -> Maybe (ConvexPolytope Rational)
 initialAngleCP n = do
   ass <- intersectWithHyperplane (space n) (HP (genericReplicate n 1) (fromInteger $ n - 2))
-  boundedConvexPolytope NonStrict ass [ineq i | i <- [1..n + 1]] -- 0 <= x_1 <= x_2 <= ... <= x_n <= 1
+  boundedConvexPolytope NonStrict ass $ fromList [ineq i | i <- [1..n + 1]] -- 0 <= x_1 <= x_2 <= ... <= x_n <= 1
   where
     ineq :: Integer -> Constraint Rational
     ineq i =
@@ -42,7 +42,7 @@ minmax n cp =
 initialGoodnessCP :: Integer -> ConvexPolytope Rational
 initialGoodnessCP n = fromJust $ do -- The zero vector is always an element of it.
   ass <- intersectWithHyperplane (space n) (HP (genericReplicate n 1) 0) -- sum_{i = 1}^n x_i = 0
-  boundedConvexPolytope NonStrict ass [c | i <- [1..n], c <- ineqs i] -- [-1, 1]^n
+  boundedConvexPolytope NonStrict ass $ fromList [c | i <- [1..n], c <- ineqs i] -- [-1, 1]^n
   where
     ineqs :: Integer -> [Constraint Rational]
     ineqs i =
@@ -53,7 +53,7 @@ inflate :: Integer -> VertexTypeSet -> Maybe (VertexTypeSet, ConvexPolytope Rati
 inflate n xs =
   do
     ass <- intersectWithHyperplane (space n) (HP (genericReplicate n 1) (fromInteger $ n - 2))
-    cp <- boundedConvexPolytope NonStrict ass [c | i <- [1..n], c <- ineqs i] -- [0, 1]^n
+    cp <- boundedConvexPolytope NonStrict ass $ fromList [c | i <- [1..n], c <- ineqs i] -- [0, 1]^n
     angleCP <- foldM cutHyperplane cp [HP (asRational v) 2 | v <- elems xs]
     let es = elems $ extremePoints angleCP
     let as = (1 / genericLength es) |*| (foldl (|+|) (zero n) es)

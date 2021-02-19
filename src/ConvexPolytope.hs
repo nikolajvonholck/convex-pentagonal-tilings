@@ -48,11 +48,10 @@ projectConstraint (ASS p bs _) (Constraint vs q) =
 
 -- Maintains the invariant if Just extr then extr is non-empty.
 -- Should be given projected constraints as input.
-computeLocalExtremePoints :: (Fractional a, Ord a) => Integer -> Set (Constraint a) -> Maybe (Set (Vector a))
+computeLocalExtremePoints :: (Fractional a, Ord a) => Integer -> Set (Constraint a) -> Set (Vector a)
 computeLocalExtremePoints n pcs =
   let xs = candidates (Just $ space n) (elems pcs)
-      extr = [x | x <- xs, all (\pc -> satisfiesConstraint NonStrict pc x) pcs]
-  in if extr == [] then Nothing else Just $ fromList extr
+  in fromList [x | x <- xs, all (\pc -> satisfiesConstraint NonStrict pc x) pcs]
   where
     candidates Nothing _ = [] -- The space is zero-dimensional, i.e. a single point.
     candidates (Just (ASS x [] _)) _ = [x] -- The space is zero-dimensional, i.e. a single point.
@@ -72,7 +71,6 @@ projectedConstraints strictness ass cs = do
     guard $ all (\pc -> satisfiesConstraint strictness pc (zero d)) zeroPcs -- Check if constraint has been violated.
     return $ fromList pcs'
 
--- Assumes that extr is non-empty.
 affineHull :: (Fractional a, Ord a) => ConvexPolytope a -> Maybe (ConvexPolytope a)
 affineHull cp@(CP _ ass cs extr) =
   case find (\c -> let pc@(Constraint vs _) = projectConstraint ass c in (not $ isZero vs) && all (\e -> evaluateConstraint pc e == EQ) extr) cs of
@@ -89,30 +87,24 @@ facetConstraints (CP strictness ass cs extr) =
     d = dimension ass
     isFacet c = let pc = projectConstraint ass c in
       case [e | e <- elems extr, evaluateConstraint pc e == EQ] of
-        [] -> False
+        [] -> False -- Not a facet.
         (p0:ps) -> rank [p |-| p0 | p <- ps] == d - 1
 
 -- The provided constraints should correspond to a bounded polytope.
-boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> [Constraint a] -> Maybe (ConvexPolytope a)
+boundedConvexPolytope :: (Fractional a, Ord a) => Strictness -> AffineSubspace a -> Set (Constraint a) -> Maybe (ConvexPolytope a)
 boundedConvexPolytope strictness ass cs = do
-    let cs' = fromList cs
-    pcs <- projectedConstraints strictness ass cs'
-    extr <- computeLocalExtremePoints (dimension ass) pcs
-    affineHull (CP strictness ass cs' extr)
+    pcs <- projectedConstraints strictness ass cs
+    let extr = computeLocalExtremePoints (dimension ass) pcs
+    affineHull (CP strictness ass cs extr)
 
 cutHalfSpace :: (Fractional a, Ord a) => ConvexPolytope a -> Constraint a -> Maybe (ConvexPolytope a)
-cutHalfSpace (CP strictness ass cs _) c = do
-    let cs' = Set.insert c cs
-    pcs <- projectedConstraints strictness ass cs'
-    extr' <- computeLocalExtremePoints (dimension ass) pcs
-    affineHull (CP strictness ass cs' extr')
+cutHalfSpace (CP strictness ass cs _) c =
+  boundedConvexPolytope strictness ass (Set.insert c cs)
 
 cutHyperplane :: (Fractional a, Ord a) => ConvexPolytope a -> Hyperplane a -> Maybe (ConvexPolytope a)
 cutHyperplane (CP strictness ass cs _) hp = do
     ass' <- intersectWithHyperplane ass hp
-    pcs <- projectedConstraints strictness ass' cs
-    extr' <- computeLocalExtremePoints (dimension ass') pcs
-    affineHull (CP strictness ass' cs extr')
+    boundedConvexPolytope strictness ass' cs
 
 extremePoints :: (Num a, Ord a) => ConvexPolytope a -> Set (Vector a)
 extremePoints (CP _ ass _ extr) = Set.map (coordsInSpace ass) extr

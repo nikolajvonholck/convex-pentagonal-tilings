@@ -33,7 +33,7 @@ typeSymmetries (name, cvts, cs) =
 makeLP :: [Hyperplane Rational] -> ConvexPolytope Rational
 makeLP hps = fromJust $ do
   ass <- foldM intersectWithHyperplane (space 5) $ (HP [1, 1, 1, 1, 1] 1):hps
-  boundedConvexPolytope Strict ass [
+  boundedConvexPolytope Strict ass $ fromList [
       constraint [-1, 0, 0, 0, 0] 0, constraint [1, 0, 0, 0, 0] 1,
       constraint [0, -1, 0, 0, 0] 0, constraint [0, 1, 0, 0, 0] 1,
       constraint [0, 0, -1, 0, 0] 0, constraint [0, 0, 1, 0, 0] 1,
