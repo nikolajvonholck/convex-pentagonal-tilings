@@ -85,7 +85,7 @@ goodSetsExcluding n xs rs (Just angleCP) goodnessCP =
                     let angleCP' = cutHyperplane angleCP (HP (asRational v) 2)
                     let goodnessCP'' = fromJust $ cutHalfSpace goodnessCP' (constraint (asRational v) 0)
                     return $ goodSetsExcluding n (insert v xs') (rs `union` fromList prevVs) angleCP' goodnessCP''
-          in if isGood xs' goodnessCP' then insert xs' g else g
+          in if xs' /= empty && isGood xs' goodnessCP' then insert xs' g else g
 
 asRational :: Vector Integer -> Vector Rational
 asRational = map fromInteger

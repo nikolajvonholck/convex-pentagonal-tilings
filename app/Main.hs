@@ -14,7 +14,7 @@ import Text.Read (readMaybe)
 import Control.Monad (forM_)
 
 import GoodSet (VertexTypeSet, goodSets, inflate, permutations, rotationsAndReflections, ignoringSymmetries, partitionByDimensionality)
-import Data.Set (empty, singleton, (\\), size, fromList, unions, elems)
+import Data.Set (empty, size, fromList, unions, elems)
 import qualified Data.Set as Set
 import TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..))
 import Type (Type(..))
@@ -38,13 +38,12 @@ main = do
 
 mainGoodSets :: IO ()
 mainGoodSets = do
-  putStrLn "Will determine all non-empty, relevant, maximal good sets..."
+  putStrLn "Will determine all relevant maximal good sets..."
   forM_ [3..8] $ \n -> do
       putStrLn $ "Considering dimension: " ++ show n
-      let maximalGoodSetsN = goodSets n
-      let nonEmptyMaximalGoodSetsN = maximalGoodSetsN \\ singleton empty
-      timeIt $ putStrLn $ "Found: " ++ (show $ size nonEmptyMaximalGoodSetsN)
-      let allPermutationsN = unions $ Set.map (fromList . (permutations n)) nonEmptyMaximalGoodSetsN
+      let relevantMaximalGoodSetsN = goodSets n
+      timeIt $ putStrLn $ "Found: " ++ (show $ size relevantMaximalGoodSetsN)
+      let allPermutationsN = unions $ Set.map (fromList . (permutations n)) relevantMaximalGoodSetsN
       putStrLn $ "All permutations: " ++ (show $ size allPermutationsN)
       let representativesN = ignoringSymmetries n (elems allPermutationsN) empty
       putStrLn $ "Ignoring symmetries: " ++ (show $ length representativesN)
