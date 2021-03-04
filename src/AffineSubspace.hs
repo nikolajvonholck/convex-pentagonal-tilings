@@ -46,7 +46,7 @@ intersectWithHyperplane (ASS p bs hps) (hp@(HP t q)) =
   let hps' = hp:hps in
   case extract (\b -> t `dot` b /= 0) bs of
     -- The affine subspace is parallel to hyperplane.
-    Nothing -> if t `dot` p == q then Just (ASS p bs hps') else Nothing
+    Nothing -> if t `dot` p == q then Just (ASS p bs hps) else Nothing
     -- The affine subspace intersects the hyperplane.
     Just (vs', u, vs'') ->
       let r = t `dot` u -- The value r is non-zero.
