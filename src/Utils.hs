@@ -53,10 +53,10 @@ zipPedantic _ _ = error "Will not zip lists of different lengths."
 zipWithPedantic :: (a -> b -> c) -> [a] -> [b] -> [c]
 zipWithPedantic f xs ys = map (uncurry f) $ zipPedantic xs ys
 
--- Positive divisors of the positive integer n.
+-- | Positive divisors of the positive integer n.
 divisors :: Integer -> [Integer]
 divisors n = [d | d <- [1..n], n `mod` d == 0]
 
--- Least common multiple of list of integers.
+-- | Least common multiple of list of integers.
 leastCommonMultiple :: [Integer] -> Integer
 leastCommonMultiple = foldl lcm 1

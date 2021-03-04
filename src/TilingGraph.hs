@@ -390,7 +390,7 @@ constructSectors angleCP lp sector = do
       else splitSector sector >>= constructSectors angleCP lp
   where
     sectorSize :: Rational
-    sectorSize = 1/1024 -- TODO: Adjust.
+    sectorSize = 1/1024
 
     splitSector :: Sector -> [Sector]
     splitSector is =
