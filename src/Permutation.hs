@@ -1,4 +1,4 @@
-module Permutation (dihedralGroup, symmetricGroup, permute) where
+module Permutation (cyclicGroup, dihedralGroup, symmetricGroup, permute) where
 
 import Utils (enumerate)
 import Data.List (permutations, genericTake)
@@ -6,19 +6,24 @@ import Data.Map.Strict (Map, elems, fromList, (!?), empty, mapMaybe)
 
 data Permutation = Permutation (Map Integer Integer) deriving (Show, Eq)
 
+cyclicGroup :: Integer -> [Permutation]
+cyclicGroup n =
+  [Permutation (toMap r) | r <- genericTake n $ iterate rotate [1..n]]
+
 dihedralGroup :: Integer -> [Permutation]
 dihedralGroup n =
   let rotations = genericTake n $ iterate rotate [1..n]
   in [Permutation (toMap p) | r <- rotations, p <- [r, reflect r]]
   where
-    rotate :: [Integer] -> [Integer]
-    rotate [] = []
-    rotate (x:xs) = xs ++ [x]
     reflect :: [Integer] -> [Integer]
     reflect = reverse
 
 symmetricGroup :: Integer -> [Permutation]
 symmetricGroup n = [Permutation (toMap p) | p <- permutations [1..n]]
+
+rotate :: [Integer] -> [Integer]
+rotate [] = []
+rotate (x:xs) = xs ++ [x]
 
 permute :: Permutation -> [a] -> [a]
 permute (Permutation p) l = elems $ compose (toMap l) p

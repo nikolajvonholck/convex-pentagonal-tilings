@@ -1,4 +1,4 @@
-module Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy, maxBy, extract, delta, zipPedantic, zipWithPedantic) where
+module Utils ((!), enumerate, findIndex, elemIndex, replaceAt, minBy, maxBy, extract, delta, zipPedantic, zipWithPedantic, divisors, leastCommonMultiple) where
 
 import qualified Data.List as List
 import Data.Foldable (minimumBy, maximumBy)
@@ -52,3 +52,11 @@ zipPedantic _ _ = error "Will not zip lists of different lengths."
 -- | Variation of zipWith requiring lists to be of the same length.
 zipWithPedantic :: (a -> b -> c) -> [a] -> [b] -> [c]
 zipWithPedantic f xs ys = map (uncurry f) $ zipPedantic xs ys
+
+-- | Positive divisors of the positive integer n.
+divisors :: Integer -> [Integer]
+divisors n = [d | d <- [1..n], n `mod` d == 0]
+
+-- | Least common multiple of list of integers.
+leastCommonMultiple :: [Integer] -> Integer
+leastCommonMultiple = foldl lcm 1

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7fee0a9f2b650cc1275ea5d30a4aa8e1965b5638d1a6c761d0be1e9e35cd19ec
+-- hash: 92e654c865c0d60ecc7b9a391ed5c6b56ad0f5401a4b5215989f38edd5fc8f31
 
 name:           convex-pentagonal-tilings
 version:        0.1.0.0
@@ -28,12 +28,19 @@ source-repository head
 library
   exposed-modules:
       AffineSubspace
+      AlgebraicNumber
+      ChebyshevPolynomial
       ConvexPolytope
-      GoodSubsets
+      GoodSet
       Interval
+      JSON
       Matrix
       Permutation
+      Polynomial
       Simplex
+      TilingGraph
+      Trigonometry
+      Type
       Utils
       Vector
   other-modules:
@@ -42,7 +49,13 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , bytestring
     , containers >=0.6.2.1
+    , http-types
+    , text
+    , timeit
+    , wai
+    , warp
   default-language: Haskell2010
 
 executable convex-pentagonal-tilings-exe
@@ -54,22 +67,42 @@ executable convex-pentagonal-tilings-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , bytestring
     , containers >=0.6.2.1
     , convex-pentagonal-tilings
+    , http-types
+    , text
+    , timeit
+    , wai
+    , warp
   default-language: Haskell2010
 
 test-suite convex-pentagonal-tilings-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      AlgebraicNumberTests
+      ChebyshevPolynomialTests
+      IntervalTests
+      MatrixTests
+      PolynomialTests
+      SimplexTests
+      TrigonometryTests
       Paths_convex_pentagonal_tilings
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , bytestring
     , containers >=0.6.2.1
     , convex-pentagonal-tilings
+    , http-types
     , tasty
     , tasty-hunit
+    , tasty-quickcheck
+    , text
+    , timeit
+    , wai
+    , warp
   default-language: Haskell2010

@@ -22,6 +22,12 @@ description:         Please see the README on GitHub at <https://github.com/niko
 dependencies:
 - base >= 4.7 && < 5
 - containers >= 0.6.2.1
+- warp
+- wai
+- http-types
+- bytestring
+- text
+- timeit
 
 library:
   source-dirs: src
@@ -49,3 +55,4 @@ tests:
     - convex-pentagonal-tilings
     - tasty
     - tasty-hunit
+    - tasty-quickcheck
