@@ -16,7 +16,7 @@ import Control.Monad (forM_)
 import GoodSet (VertexTypeSet, goodSets, inflate, permutations, rotationsAndReflections, ignoringSymmetries, partitionByDimensionality)
 import Data.Set (empty, size, fromList, unions, elems)
 import qualified Data.Set as Set
-import TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..))
+import TilingGraph (TilingGraph, backtrackingSearch, Pentagon(..))
 import Type (Type(..))
 import Utils (enumerate, (!))
 import JSON
@@ -32,7 +32,7 @@ main = do
   args <- getArgs
   case args of
     ["good-sets"] -> mainGoodSets
-    ["exhaustive-search"] -> mainExhaustiveSearch
+    ["backtracking-search"] -> mainBacktrackingSearch
     ["server"] -> mainServer
     x -> putStrLn $ "Invalid arguments: " ++ show x
 
@@ -69,11 +69,11 @@ mainServer = do
   tracks <- backtrackings <$> loadGoodSetsByRao
   startServer . server . makeResponder $ tracks
 
-mainExhaustiveSearch :: IO ()
-mainExhaustiveSearch = do
+mainBacktrackingSearch :: IO ()
+mainBacktrackingSearch = do
   tracks <- backtrackings <$> loadGoodSetsByRao
   forM_ (toAscList tracks) $ \(i, (goodSet, track)) -> do
-    putStrLn $ "Exhaustive search for good set: " ++ show i
+    putStrLn $ "Backtracking search for good set: " ++ show i
     print $ elems goodSet
     let foundTypes = catMaybes [knownType | (_, _, _, knownType) <- track]
     let foundTypeNames = fromList [ name | T (name, _) _ _  <- foundTypes]
@@ -91,7 +91,7 @@ loadGoodSetsByRao = do
 
 backtrackings :: [(VertexTypeSet, ConvexPolytope Rational)] -> Map Integer (VertexTypeSet, [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)])
 backtrackings raoGoodSets =
-  Map.fromList [(i, (goodSet, exhaustiveSearch goodSet angleCP)) | (i, (goodSet, angleCP)) <- enumerate raoGoodSets]
+  Map.fromList [(i, (goodSet, backtrackingSearch goodSet angleCP)) | (i, (goodSet, angleCP)) <- enumerate raoGoodSets]
 
 startServer :: Application -> IO ()
 startServer app = do

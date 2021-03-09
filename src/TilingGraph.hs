@@ -1,4 +1,4 @@
-module TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..)) where
+module TilingGraph (TilingGraph, backtrackingSearch, Pentagon(..)) where
 
 import Vector (Vector, (|+|), (|-|), (|*|))
 import Interval (Interval, interval, begin, end, midpoint, width)
@@ -339,8 +339,8 @@ halfVertexTypes xs =
 
 -- Initiates backtracking search given relevant maximal good set along with the
 -- polytope corresponding to the set of compatible angles.
-exhaustiveSearch :: VertexTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
-exhaustiveSearch xs angleCP =
+backtrackingSearch :: VertexTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
+backtrackingSearch xs angleCP =
   let compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
       xss = (xs, halfVertexTypes xs)
       g = pentagonGraph 0 CounterClockwise
