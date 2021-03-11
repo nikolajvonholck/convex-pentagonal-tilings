@@ -1,4 +1,4 @@
-module TilingGraph (TilingGraph, exhaustiveSearch, Pentagon(..)) where
+module TilingGraph (TilingGraph, backtrackingSearch, Pentagon(..)) where
 
 import Vector (Vector, (|+|), (|-|), (|*|))
 import Interval (Interval, interval, begin, end, midpoint, width)
@@ -171,6 +171,8 @@ exteriorRuns g =
           let (run, r') = collectRun r
           in (R v a (Just (Edge s run)), r')
 
+-- Returns backtracking state where every run is decided and every vertex that
+-- can be completed has been completed, possibly branching along the way.
 completeRuns :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational)]
 completeRuns xss (g'', lp'') = completeRuns' (g'', lp'') $ exteriorRuns g''
   where
@@ -217,6 +219,8 @@ completeRuns xss (g'', lp'') = completeRuns' (g'', lp'') $ exteriorRuns g''
 
 -- Edges of v are followed by edges of v' in counterclockwise direction.
 -- Vertex id (min v v') is kept, while (max v v') is discarded.
+-- Returns backtracking state where every run is decided and every vertex that
+-- can be completed has been completed, possibly branching along the way.
 mergeVertices :: (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> Vertex -> Vertex -> ExteriorAngle -> [(TilingGraph, ConvexPolytope Rational)]
 mergeVertices xss (g, lp) v v' a =
   do
@@ -253,6 +257,7 @@ mergeVertices xss (g, lp) v v' a =
       in (hds', (Corner ea e1 ia e2):cst)
     completeVertex _ = error "Impossible: Vertex is always incomplete."
 
+-- Oracle to pick incomplete vertex of tiling graph to add next tile to.
 pickIncompleteVertex :: TilingGraph -> (VertexTypeSet, VertexTypeSet) -> Vertex
 pickIncompleteVertex g xss =
   let incompleteVertices = Map.keys $ Map.filter (not . isVertexComplete . snd) g
@@ -293,12 +298,12 @@ pickIncompleteVertex g xss =
     numberOfVerticesAlongRun (R _ _ Nothing) = 1
     numberOfVerticesAlongRun (R _ _ (Just (Edge _ r))) = 1 + numberOfVerticesAlongRun r
 
--- Assumes all possible completions performed.
--- Assumptions:
---  • lp is non-empty (this is ensured by type system and ConvexPolytope impl)
---  • The corrected vertex type of every complete vertex lies in xs.
---  • The corrected vertex type of every non-complete vertex "strictly" "respects" xs (i.e is compatible but not immediately completable).
---  • There are no unchecked exterior (pi/empty) angles.
+-- Performs backtracking search. Assumes the provided backtracking state to be
+-- valid and satisfy that every run has been decided and every vertex that can
+-- be completed has been completed. It backtracks if it detects that no convex
+-- pentagon satisfies the backtracking state or if we have reached a known type.
+-- Otherwise it picks an incomplete vertex of the tiling graph and branches on
+-- every possible way to add a new tile at this vertex.
 backtrack :: (ConvexPolytope Rational -> Maybe Type) -> (ConvexPolytope Rational -> Maybe Pentagon) -> (VertexTypeSet, VertexTypeSet) -> (TilingGraph, ConvexPolytope Rational) -> [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
 backtrack findKnownType construct xss = backtrack'
   where
@@ -308,7 +313,7 @@ backtrack findKnownType construct xss = backtrack'
       let knownType = findKnownType lp
       (g, lp, pentagon, knownType) : do
           guard $ not $ isJust knownType
-          -- Situation: We will have to add another tile.
+          -- We will now add another tile.
           let v = pickIncompleteVertex g xss
           let (hds, cs) = vertexInfo g v
           (direction, hds') <- if isCompatibleWith (snd xss) (vertexType cs)
@@ -332,8 +337,10 @@ halfVertexTypes xs =
   let withEvenValues = Set.filter (\x -> all (\v -> v `mod` 2 == 0) x) xs
   in Set.map (\x -> [v `div` 2 | v <- x]) withEvenValues
 
-exhaustiveSearch :: VertexTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
-exhaustiveSearch xs angleCP =
+-- Initiates backtracking search given relevant maximal good set along with the
+-- polytope corresponding to the set of compatible angles.
+backtrackingSearch :: VertexTypeSet -> ConvexPolytope Rational -> [(TilingGraph, ConvexPolytope Rational, Pentagon, Maybe Type)]
+backtrackingSearch xs angleCP =
   let compatibleTypes = [t | t@(T _ cvts _) <- knownTypes, all (`elem` xs) cvts]
       xss = (xs, halfVertexTypes xs)
       g = pentagonGraph 0 CounterClockwise
@@ -415,7 +422,7 @@ constructSectors angleCP lp sector = do
             ]
           (mins, maxs) = (begin <$> angleBoundingBox, end <$> angleBoundingBox)
       in do
-        guard $ all (<=1) mins && all (0<=) maxs -- TODO: Consider strict ineqs.
+        guard $ all (<1) mins && all (0<) maxs -- Ensure non-degenerate angles.
         lp' <- foldM cutHalfSpace lp constraints
         let as = averageVector angleBounds
         let ls = averageVector (elems $ extremePoints lp')

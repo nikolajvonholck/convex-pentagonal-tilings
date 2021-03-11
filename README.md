@@ -1,11 +1,11 @@
 # Convex Pentagonal Tilings
-This project is a reproduction of the results presented by Michael Rao in the article "Exhaustive search of convex pentagons which tile the plane" (https://arxiv.org/abs/1708.00274). It consists of a Haskell application responsible for the computations along with a Next.js React application for visualising the exhaustive search.
+This project is a reproduction of the results presented by Michael Rao in the article "Exhaustive search of convex pentagons which tile the plane" (https://arxiv.org/abs/1708.00274). It consists of a Haskell application responsible for the computations along with a Next.js React application for visualising the backtracking search.
 
 ## Requirements
 To compile and run the Haskell application you will need to install Stack
 (https://docs.haskellstack.org/en/stable/README/#how-to-install).
 
-To visualize the exhaustive backtracking search you will need to further install Node.js (https://nodejs.org/en/download/)
+To visualize the backtracking search you will need to further install Node.js (https://nodejs.org/en/download/)
 
 ## Compiling
 You can compile the Haskell application by executing:
@@ -14,18 +14,18 @@ stack build --pedantic
 ```
 
 ## Determining good sets
-Determine all relevant good sets by executing
+Determine all relevant maximal good sets by executing
 ```bash
 stack exec convex-pentagonal-tilings-exe good-sets
 ```
 
-## Performing exhaustive search
-Perform an exhaustive search for all convex pentagons that tile the plane by executing
+## Performing backtracking search
+Perform backtracking search for all convex pentagons that tile the plane by executing
 ```bash
-stack exec convex-pentagonal-tilings-exe exhaustive-search
+stack exec convex-pentagonal-tilings-exe backtracking-search
 ```
 
-## Visualising exhaustive search
+## Visualising backtracking search
 First, start up the Haskell application in server mode using
 ```bash
 stack exec convex-pentagonal-tilings-exe server
