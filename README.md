@@ -1,6 +1,7 @@
 # Convex Pentagonal Tilings
 This project is a reproduction of the results presented by Michael Rao in the article "Exhaustive search of convex pentagons which tile the plane" (https://arxiv.org/abs/1708.00274). It consists of a Haskell application responsible for the computations along with a Next.js React application for visualising the backtracking search.
 
+
 ## Requirements
 To compile and run the Haskell application you will need to install Stack
 (https://docs.haskellstack.org/en/stable/README/#how-to-install).
